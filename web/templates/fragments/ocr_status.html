@@ -1,5 +1,14 @@
-<div id="ocr-status-container" hx-get="/scans/{{.Scan.ID}}" hx-trigger="every 2s" hx-swap="outerHTML" hx-target="this">
+<div id="ocr-status-container" 
+     {{if not (or .OCRResult (eq .Scan.Status "failed"))}}
+     hx-get="/scans/{{.Scan.ID}}" hx-trigger="every 2s" hx-swap="outerHTML" hx-target="this"
+     {{end}}>
     {{if .OCRResult}}
+    <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div class="aspect-w-16 aspect-h-9 bg-gray-100 flex items-center justify-center">
+            <img src="/scans/{{.Scan.ID}}/image" alt="Uploaded book page" class="max-w-full h-auto object-contain">
+        </div>
+    </div>
+    
     <div class="bg-white rounded-lg shadow p-6 mb-6">
         <div class="prose max-w-none">
             <p class="text-lg leading-relaxed text-gray-800 whitespace-pre-wrap" id="ocr-text">{{.OCRResult.RawText}}</p>

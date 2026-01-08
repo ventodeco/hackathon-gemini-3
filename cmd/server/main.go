@@ -63,10 +63,19 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		if strings.HasSuffix(r.URL.Path, "/annotate") {
-			h.Annotate(w, r)
-		} else {
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/scans/"), "/")
+		if len(parts) == 1 {
 			h.GetScan(w, r)
+			return
+		}
+		
+		switch parts[1] {
+		case "annotate":
+			h.Annotate(w, r)
+		case "image":
+			h.GetScanImage(w, r)
+		default:
+			http.NotFound(w, r)
 		}
 	})
 

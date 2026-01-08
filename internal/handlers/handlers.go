@@ -65,31 +65,31 @@ func (h *Handlers) CreateScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseMultipartForm(h.config.MaxUploadSize); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		h.renderErrorFragment(w, "Failed to parse form")
 		return
 	}
 
 	file, header, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Failed to get file", http.StatusBadRequest)
+		h.renderErrorFragment(w, "Please select an image to upload")
 		return
 	}
 	defer file.Close()
 
 	mimeType := header.Header.Get("Content-Type")
 	if !isValidImageType(mimeType) {
-		http.Error(w, "Invalid image type", http.StatusBadRequest)
+		h.renderErrorFragment(w, "Invalid image type. Please use JPEG, PNG, or WebP.")
 		return
 	}
 
 	if header.Size > h.config.MaxUploadSize {
-		http.Error(w, "File too large", http.StatusRequestEntityTooLarge)
+		h.renderErrorFragment(w, fmt.Sprintf("File too large. Maximum size is %v MB.", h.config.MaxUploadSize/(1024*1024)))
 		return
 	}
 
 	imageData, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		h.renderErrorFragment(w, "Failed to read uploaded file")
 		return
 	}
 
@@ -106,14 +106,14 @@ func (h *Handlers) CreateScan(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.CreateScan(r.Context(), scan); err != nil {
 		log.Printf("Failed to create scan: %v", err)
-		http.Error(w, "Failed to create scan", http.StatusInternalServerError)
+		h.renderErrorFragment(w, "Failed to initialize scan")
 		return
 	}
 
 	storagePath, sha256, err := h.fileStorage.SaveImage(scanID, imageData, mimeType)
 	if err != nil {
 		log.Printf("Failed to save image: %v", err)
-		http.Error(w, "Failed to save image", http.StatusInternalServerError)
+		h.renderErrorFragment(w, "Failed to save uploaded image")
 		return
 	}
 
@@ -128,11 +128,17 @@ func (h *Handlers) CreateScan(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.CreateScanImage(r.Context(), image); err != nil {
 		log.Printf("Failed to create scan image: %v", err)
-		http.Error(w, "Failed to create scan image", http.StatusInternalServerError)
+		h.renderErrorFragment(w, "Failed to create scan image")
 		return
 	}
 
 	go h.processOCR(context.Background(), scanID, imageData, mimeType)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", fmt.Sprintf("/scans/%s", scanID))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	http.Redirect(w, r, fmt.Sprintf("/scans/%s", scanID), http.StatusFound)
 }
@@ -221,7 +227,7 @@ func (h *Handlers) Annotate(w http.ResponseWriter, r *http.Request) {
 		WhenToUse:          annotationResp.WhenToUse,
 		WordBreakdown:      annotationResp.WordBreakdown,
 		AlternativeMeanings: annotationResp.AlternativeMeanings,
-		Model:              "gemini-1.5-flash",
+		Model:              "gemini-2.5-flash",
 		PromptVersion:      "1.0",
 		CreatedAt:          time.Now(),
 	}
@@ -236,6 +242,32 @@ func (h *Handlers) Annotate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func (h *Handlers) GetScanImage(w http.ResponseWriter, r *http.Request) {
+	scanID := strings.TrimPrefix(r.URL.Path, "/scans/")
+	scanID = strings.TrimSuffix(scanID, "/image")
+	if scanID == "" {
+		http.Error(w, "Scan ID required", http.StatusBadRequest)
+		return
+	}
+
+	image, err := h.db.GetScanImage(r.Context(), scanID)
+	if err != nil {
+		http.Error(w, "Image not found", http.StatusNotFound)
+		return
+	}
+
+	data, err := h.fileStorage.OpenImage(image.StoragePath)
+	if err != nil {
+		log.Printf("Failed to open image %s: %v", image.StoragePath, err)
+		http.Error(w, "Failed to load image", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", image.MimeType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	w.Write(data)
 }
 
 func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
@@ -279,6 +311,7 @@ func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []by
 }
 
 func (h *Handlers) renderErrorFragment(w http.ResponseWriter, message string) {
+	w.WriteHeader(http.StatusBadRequest)
 	data := map[string]interface{}{
 		"Message":   message,
 		"Retryable": true,

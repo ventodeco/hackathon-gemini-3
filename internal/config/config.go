@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -18,6 +20,9 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	loadEnvFile(".env.local")
+	loadEnvFile(".env")
+
 	geminiAPIKey := os.Getenv("GOOGLE_API_KEY")
 	if geminiAPIKey == "" {
 		geminiAPIKey = os.Getenv("GEMINI_API_KEY")
@@ -80,4 +85,38 @@ func getEnvAsBoolOrDefault(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+func loadEnvFile(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+			value = strings.Trim(value, `"`)
+		} else if strings.HasPrefix(value, `'`) && strings.HasSuffix(value, `'`) {
+			value = strings.Trim(value, `'`)
+		}
+
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
 }

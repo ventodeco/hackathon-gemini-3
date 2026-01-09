@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"strings"
+	"time"
 
 	"google.golang.org/genai"
 )
@@ -16,6 +19,7 @@ type Client interface {
 type client struct {
 	genaiClient *genai.Client
 	modelName   string
+	initErr     error
 }
 
 func NewClient(apiKey string) Client {
@@ -28,12 +32,14 @@ func NewClient(apiKey string) Client {
 		return &client{
 			genaiClient: nil,
 			modelName:   "gemini-2.5-flash",
+			initErr:     err,
 		}
 	}
 
 	return &client{
 		genaiClient: genaiClient,
 		modelName:   "gemini-2.5-flash",
+		initErr:     nil,
 	}
 }
 
@@ -44,19 +50,22 @@ type OCRResponse struct {
 }
 
 type AnnotationResponse struct {
-	Meaning            string
-	UsageExample       string
-	WhenToUse          string
-	WordBreakdown      string
-	AlternativeMeanings string
+	Meaning             string `json:"meaning"`
+	UsageExample        string `json:"usage_example"`
+	WhenToUse           string `json:"when_to_use"`
+	WordBreakdown       string `json:"word_breakdown"`
+	AlternativeMeanings string `json:"alternative_meanings"`
 }
 
 func (c *client) OCR(ctx context.Context, imageData []byte, mimeType string) (*OCRResponse, error) {
 	if c.genaiClient == nil {
+		if c.initErr != nil {
+			return nil, fmt.Errorf("gemini client not initialized: %w", c.initErr)
+		}
 		return nil, fmt.Errorf("gemini client not initialized: check API key")
 	}
 
-	prompt := "Extract all Japanese text from this image. Return a JSON object with 'raw_text' (the extracted text) and 'language' (detected language code). Preserve line breaks and formatting."
+	prompt := "Extract all Japanese text from this image. Return ONLY a JSON object with keys 'raw_text' (the extracted text) and 'language' (detected language code). Preserve line breaks and formatting. Do not include markdown, code fences, or any extra text."
 
 	parts := []*genai.Part{
 		{Text: prompt},
@@ -68,12 +77,42 @@ func (c *client) OCR(ctx context.Context, imageData []byte, mimeType string) (*O
 		},
 	}
 
-	result, err := c.genaiClient.Models.GenerateContent(
-		ctx,
-		c.modelName,
-		[]*genai.Content{{Parts: parts}},
-		nil,
-	)
+	cfg := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"raw_text": {Type: genai.TypeString},
+				"language": {Type: genai.TypeString},
+			},
+			Required:         []string{"raw_text", "language"},
+			PropertyOrdering: []string{"raw_text", "language"},
+		},
+	}
+
+	var result *genai.GenerateContentResponse
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		result, err = c.genaiClient.Models.GenerateContent(
+			ctx,
+			c.modelName,
+			[]*genai.Content{{Parts: parts}},
+			cfg,
+		)
+		if err == nil {
+			break
+		}
+		if !isOverloadedError(err) || attempt == 2 {
+			return nil, fmt.Errorf("failed to generate OCR content: %w", err)
+		}
+
+		// Backoff (with small jitter) before retrying overloaded/UNAVAILABLE errors.
+		backoff := time.Duration(500*(1<<attempt)) * time.Millisecond
+		jitter := time.Duration(rand.Intn(250)) * time.Millisecond
+		if !sleepWithContext(ctx, backoff+jitter) {
+			return nil, fmt.Errorf("failed to generate OCR content: %w", err)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate OCR content: %w", err)
 	}
@@ -89,6 +128,17 @@ func (c *client) OCR(ctx context.Context, imageData []byte, mimeType string) (*O
 	}
 
 	if err := json.Unmarshal([]byte(text), &structured); err != nil {
+		normalized := normalizeJSONCandidate(text)
+		if normalized != text {
+			if err2 := json.Unmarshal([]byte(normalized), &structured); err2 == nil {
+				structuredJSON, _ := json.Marshal(structured)
+				return &OCRResponse{
+					RawText:        structured.RawText,
+					StructuredJSON: string(structuredJSON),
+					Language:       structured.Language,
+				}, nil
+			}
+		}
 		return &OCRResponse{
 			RawText:        text,
 			StructuredJSON: "",
@@ -107,6 +157,9 @@ func (c *client) OCR(ctx context.Context, imageData []byte, mimeType string) (*O
 
 func (c *client) Annotate(ctx context.Context, ocrText string, selectedText string) (*AnnotationResponse, error) {
 	if c.genaiClient == nil {
+		if c.initErr != nil {
+			return nil, fmt.Errorf("gemini client not initialized: %w", c.initErr)
+		}
 		return nil, fmt.Errorf("gemini client not initialized: check API key")
 	}
 
@@ -127,12 +180,56 @@ Provide a detailed annotation in JSON format with these exact fields:
 
 Return only valid JSON, no markdown formatting.`, ocrText, selectedText)
 
-	result, err := c.genaiClient.Models.GenerateContent(
-		ctx,
-		c.modelName,
-		genai.Text(prompt),
-		nil,
-	)
+	cfg := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"meaning":              {Type: genai.TypeString},
+				"usage_example":        {Type: genai.TypeString},
+				"when_to_use":          {Type: genai.TypeString},
+				"word_breakdown":       {Type: genai.TypeString},
+				"alternative_meanings": {Type: genai.TypeString},
+			},
+			Required: []string{
+				"meaning",
+				"usage_example",
+				"when_to_use",
+				"word_breakdown",
+				"alternative_meanings",
+			},
+			PropertyOrdering: []string{
+				"meaning",
+				"usage_example",
+				"when_to_use",
+				"word_breakdown",
+				"alternative_meanings",
+			},
+		},
+	}
+
+	var result *genai.GenerateContentResponse
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		result, err = c.genaiClient.Models.GenerateContent(
+			ctx,
+			c.modelName,
+			genai.Text(prompt),
+			cfg,
+		)
+		if err == nil {
+			break
+		}
+		if !isOverloadedError(err) || attempt == 2 {
+			return nil, fmt.Errorf("failed to generate annotation: %w", err)
+		}
+
+		backoff := time.Duration(500*(1<<attempt)) * time.Millisecond
+		jitter := time.Duration(rand.Intn(250)) * time.Millisecond
+		if !sleepWithContext(ctx, backoff+jitter) {
+			return nil, fmt.Errorf("failed to generate annotation: %w", err)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate annotation: %w", err)
 	}
@@ -144,8 +241,51 @@ Return only valid JSON, no markdown formatting.`, ocrText, selectedText)
 
 	var annotation AnnotationResponse
 	if err := json.Unmarshal([]byte(text), &annotation); err != nil {
+		normalized := normalizeJSONCandidate(text)
+		if normalized != text {
+			if err2 := json.Unmarshal([]byte(normalized), &annotation); err2 == nil {
+				return &annotation, nil
+			}
+		}
 		return nil, fmt.Errorf("failed to parse annotation JSON: %w", err)
 	}
 
 	return &annotation, nil
+}
+
+func isOverloadedError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "503") || strings.Contains(msg, "unavailable") || strings.Contains(msg, "overloaded")
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+func normalizeJSONCandidate(s string) string {
+	trimmed := strings.TrimSpace(s)
+
+	// Strip common fenced JSON blocks: ```json\n{...}\n```
+	if strings.HasPrefix(trimmed, "```") {
+		if idx := strings.Index(trimmed, "\n"); idx != -1 {
+			trimmed = strings.TrimSpace(trimmed[idx+1:])
+		}
+		trimmed = strings.TrimSuffix(trimmed, "```")
+		trimmed = strings.TrimSpace(trimmed)
+	}
+
+	// If there's extra text, try to extract the outermost JSON object.
+	start := strings.IndexByte(trimmed, '{')
+	end := strings.LastIndexByte(trimmed, '}')
+	if start != -1 && end != -1 && end > start {
+		return strings.TrimSpace(trimmed[start : end+1])
+	}
+	return strings.TrimSpace(s)
 }

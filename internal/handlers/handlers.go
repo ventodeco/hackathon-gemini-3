@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -151,6 +152,50 @@ func (h *Handlers) GetScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	scan, ocrResult, err := h.db.GetScanWithOCR(r.Context(), scanID)
+	// #region agent log
+	writeDebugLog := func(location, message string, hypothesisId string, data map[string]interface{}) {
+		logPath := "/Users/mac/WebApps/projects/gemini-hackathon/.cursor/debug.log"
+		dirPath := "/Users/mac/WebApps/projects/gemini-hackathon/.cursor"
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			log.Printf("ERROR: Failed to create .cursor directory: %v", err)
+			return
+		}
+		logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Printf("ERROR: Failed to open debug.log: %v", err)
+			return
+		}
+		defer logFile.Close()
+		logData, marshalErr := json.Marshal(map[string]interface{}{
+			"sessionId":    "debug-session",
+			"runId":         "run1",
+			"hypothesisId":   hypothesisId,
+			"location":      location,
+			"message":       message,
+			"data":          data,
+			"timestamp":     time.Now().UnixMilli(),
+		})
+		if marshalErr != nil {
+			log.Printf("ERROR: Failed to marshal debug log: %v", marshalErr)
+			return
+		}
+		if _, writeErr := logFile.WriteString(string(logData) + "\n"); writeErr != nil {
+			log.Printf("ERROR: Failed to write debug log: %v", writeErr)
+			return
+		}
+		if syncErr := logFile.Sync(); syncErr != nil {
+			log.Printf("ERROR: Failed to sync debug log: %v", syncErr)
+		}
+	}
+	if err != nil {
+		writeDebugLog("handlers.go:154", "GetScanWithOCR error", "C", map[string]interface{}{"scanID": scanID, "error": err.Error()})
+	} else if scan != nil {
+		hasOCR := ocrResult != nil
+		shouldStopPolling := hasOCR || scan.Status == "failed" || scan.Status == "failed_overloaded" || scan.Status == "failed_auth"
+		writeDebugLog("handlers.go:162", "GetScanWithOCR result", "C", map[string]interface{}{"scanID": scanID, "status": scan.Status, "hasOCR": hasOCR, "shouldStopPolling": shouldStopPolling})
+		log.Printf("DEBUG: GetScan for %s - status: %q, hasOCR: %v, shouldStopPolling: %v", scanID, scan.Status, hasOCR, shouldStopPolling)
+	}
+	// #endregion
 	if err != nil {
 		log.Printf("GetScanWithOCR error for scan %s: %v", scanID, err)
 		http.Error(w, "Scan not found", http.StatusNotFound)
@@ -168,7 +213,9 @@ func (h *Handlers) GetScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
-		if err := h.templates.ExecuteTemplate(w, "fragments/ocr_status.html", data); err == nil {
+		// Note: templates are parsed with their base filename (e.g. "ocr_status.html"),
+		// not a path like "fragments/ocr_status.html".
+		if err := h.templates.ExecuteTemplate(w, "ocr_status.html", data); err == nil {
 			return
 		}
 	}
@@ -238,7 +285,8 @@ func (h *Handlers) Annotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.templates.ExecuteTemplate(w, "fragments/annotation.html", annotation); err != nil {
+	// Templates are parsed with their base filename (e.g. "annotation.html").
+	if err := h.templates.ExecuteTemplate(w, "annotation.html", annotation); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -276,12 +324,100 @@ func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []byte, mimeType string) {
+	// #region agent log
+	writeDebugLog := func(location, message string, hypothesisId string, data map[string]interface{}) {
+		logPath := "/Users/mac/WebApps/projects/gemini-hackathon/.cursor/debug.log"
+		dirPath := "/Users/mac/WebApps/projects/gemini-hackathon/.cursor"
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			log.Printf("ERROR: Failed to create .cursor directory: %v", err)
+			return
+		}
+		logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Printf("ERROR: Failed to open debug.log: %v", err)
+			return
+		}
+		defer logFile.Close()
+		logData, marshalErr := json.Marshal(map[string]interface{}{
+			"sessionId":    "debug-session",
+			"runId":         "run1",
+			"hypothesisId":   hypothesisId,
+			"location":      location,
+			"message":       message,
+			"data":          data,
+			"timestamp":     time.Now().UnixMilli(),
+		})
+		if marshalErr != nil {
+			log.Printf("ERROR: Failed to marshal debug log: %v", marshalErr)
+			return
+		}
+		if _, writeErr := logFile.WriteString(string(logData) + "\n"); writeErr != nil {
+			log.Printf("ERROR: Failed to write debug log: %v", writeErr)
+			return
+		}
+		if syncErr := logFile.Sync(); syncErr != nil {
+			log.Printf("ERROR: Failed to sync debug log: %v", syncErr)
+		}
+	}
+	writeDebugLog("handlers.go:359", "processOCR entry", "A", map[string]interface{}{"scanID": scanID})
+	// #endregion
 	log.Printf("Starting OCR processing for scan %s", scanID)
+	// #region agent log
+	writeDebugLog("handlers.go:362", "Before OCR call", "A", map[string]interface{}{"scanID": scanID, "imageDataLen": len(imageData)})
+	// #endregion
 	ocrResp, err := h.geminiClient.OCR(ctx, imageData, mimeType)
+	// #region agent log
 	if err != nil {
+		writeDebugLog("handlers.go:365", "OCR call returned with error", "A", map[string]interface{}{"scanID": scanID, "errorOccurred": true})
+	} else {
+		writeDebugLog("handlers.go:365", "OCR call returned successfully", "A", map[string]interface{}{"scanID": scanID, "errorOccurred": false, "responseLen": len(ocrResp.RawText)})
+	}
+	// #endregion
+	if err != nil {
+		// #region agent log
+		errMsg := err.Error()
+		writeDebugLog("handlers.go:301", "OCR error received", "A", map[string]interface{}{"scanID": scanID, "errorMsg": errMsg, "errorType": fmt.Sprintf("%T", err)})
+		// #endregion
 		log.Printf("OCR failed for scan %s: %v", scanID, err)
-		if updateErr := h.db.UpdateScanStatus(ctx, scanID, "failed"); updateErr != nil {
-			log.Printf("Failed to update scan status to failed: %v", updateErr)
+		status := "failed"
+		
+		errMsgLower := strings.ToLower(errMsg)
+		// #region agent log
+		hasOverloaded := strings.Contains(errMsg, "503") ||
+			strings.Contains(errMsg, "429") ||
+			strings.Contains(errMsgLower, "overloaded") ||
+			strings.Contains(errMsg, "UNAVAILABLE") ||
+			strings.Contains(errMsgLower, "unavailable") ||
+			strings.Contains(errMsg, "RESOURCE_EXHAUSTED") ||
+			strings.Contains(errMsgLower, "quota")
+		hasAuth := strings.Contains(errMsg, "401") || strings.Contains(errMsg, "403") || strings.Contains(errMsgLower, "api key") || strings.Contains(errMsg, "not initialized")
+		writeDebugLog("handlers.go:311", "Error pattern check", "A", map[string]interface{}{"scanID": scanID, "hasOverloaded": hasOverloaded, "hasAuth": hasAuth, "errMsg": errMsg, "errMsgLower": errMsgLower})
+		// #endregion
+		log.Printf("DEBUG: Error message for scan %s: %q (lowercase: %q)", scanID, errMsg, errMsgLower)
+		if hasOverloaded {
+			status = "failed_overloaded"
+			log.Printf("DEBUG: Setting status to failed_overloaded for scan %s", scanID)
+		} else if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "403") || strings.Contains(errMsgLower, "api key") || strings.Contains(errMsg, "not initialized") {
+			status = "failed_auth"
+			log.Printf("DEBUG: Setting status to failed_auth for scan %s", scanID)
+		} else {
+			log.Printf("DEBUG: No pattern matched for scan %s, keeping status as 'failed'", scanID)
+		}
+		
+		// #region agent log
+		writeDebugLog("handlers.go:329", "Before status update", "B", map[string]interface{}{"scanID": scanID, "status": status})
+		// #endregion
+		log.Printf("DEBUG: Attempting to update scan %s status to %s", scanID, status)
+		if updateErr := h.db.UpdateScanStatus(ctx, scanID, status); updateErr != nil {
+			// #region agent log
+			writeDebugLog("handlers.go:334", "Status update failed", "B", map[string]interface{}{"scanID": scanID, "updateErr": updateErr.Error()})
+			// #endregion
+			log.Printf("ERROR: Failed to update scan status to %s for scan %s: %v", status, scanID, updateErr)
+		} else {
+			// #region agent log
+			writeDebugLog("handlers.go:340", "Status update succeeded", "B", map[string]interface{}{"scanID": scanID, "status": status})
+			// #endregion
+			log.Printf("DEBUG: Successfully updated scan %s status to %s", scanID, status)
 		}
 		return
 	}
@@ -290,7 +426,7 @@ func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []by
 	ocrResult := &models.OCRResult{
 		ID:             generateID(),
 		ScanID:         scanID,
-		Model:          "gemini-1.5-flash",
+		Model:          "gemini-2.5-flash",
 		Language:       &ocrResp.Language,
 		RawText:        ocrResp.RawText,
 		StructuredJSON: &ocrResp.StructuredJSON,
@@ -316,7 +452,8 @@ func (h *Handlers) renderErrorFragment(w http.ResponseWriter, message string) {
 		"Message":   message,
 		"Retryable": true,
 	}
-	if err := h.templates.ExecuteTemplate(w, "fragments/error.html", data); err != nil {
+	// Templates are parsed with their base filename (e.g. "error.html").
+	if err := h.templates.ExecuteTemplate(w, "error.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

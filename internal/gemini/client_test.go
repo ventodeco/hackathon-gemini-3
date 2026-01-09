@@ -55,8 +55,12 @@ func TestOCR_Integration(t *testing.T) {
 	ctx := context.Background()
 	result, err := client.OCR(ctx, imageData, "image/jpeg")
 	if err != nil {
-		if strings.Contains(err.Error(), "overloaded") || strings.Contains(err.Error(), "503") {
-			t.Skipf("Skipping test due to API overload: %v", err)
+		if strings.Contains(err.Error(), "overloaded") ||
+			strings.Contains(err.Error(), "503") ||
+			strings.Contains(err.Error(), "429") ||
+			strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") ||
+			strings.Contains(strings.ToLower(err.Error()), "quota") {
+			t.Skipf("Skipping test due to API overload/quota: %v", err)
 		}
 		t.Fatalf("OCR failed: %v", err)
 	}
@@ -175,8 +179,12 @@ func TestAnnotate_Integration(t *testing.T) {
 	ctx := context.Background()
 	result, err := client.Annotate(ctx, ocrText, selectedText)
 	if err != nil {
-		if strings.Contains(err.Error(), "overloaded") || strings.Contains(err.Error(), "503") {
-			t.Skipf("Skipping test due to API overload: %v", err)
+		if strings.Contains(err.Error(), "overloaded") ||
+			strings.Contains(err.Error(), "503") ||
+			strings.Contains(err.Error(), "429") ||
+			strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") ||
+			strings.Contains(strings.ToLower(err.Error()), "quota") {
+			t.Skipf("Skipping test due to API overload/quota: %v", err)
 		}
 		t.Fatalf("Annotate failed: %v", err)
 	}

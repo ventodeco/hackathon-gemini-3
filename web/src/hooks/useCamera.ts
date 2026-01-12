@@ -17,15 +17,21 @@ export function useCamera(): UseCameraReturn {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const isSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
+  useEffect(() => {
+    streamRef.current = stream
+  }, [stream])
+
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop())
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
       setStream(null)
     }
-  }, [stream])
+  }, [])
 
   const startCamera = useCallback(async () => {
     if (!isSupported) {
@@ -104,9 +110,12 @@ export function useCamera(): UseCameraReturn {
 
   useEffect(() => {
     return () => {
-      stopCamera()
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
     }
-  }, [stopCamera])
+  }, [])
 
   return {
     stream,

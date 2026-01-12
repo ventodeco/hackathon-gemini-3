@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCamera } from '@/hooks/useCamera'
 import CameraView from '@/components/camera/CameraView'
@@ -9,15 +9,25 @@ export default function CameraPage() {
   const navigate = useNavigate()
   const { stream, error, isSupported, videoRef, startCamera, stopCamera, switchCamera, capturePhoto } = useCamera()
   const [isCapturing, setIsCapturing] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const capturedBlobRef = useRef<Blob | null>(null)
 
   useEffect(() => {
-    if (isSupported) {
+    if (isSupported && !previewUrl) {
       startCamera()
     }
     return () => {
       stopCamera()
     }
-  }, [isSupported, startCamera, stopCamera])
+  }, [isSupported, startCamera, stopCamera, previewUrl])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   const handleCapture = async () => {
     if (isCapturing) return
@@ -27,21 +37,52 @@ export default function CameraPage() {
 
     if (blob) {
       const imageUrl = URL.createObjectURL(blob)
+      capturedBlobRef.current = blob
+      setPreviewUrl(imageUrl)
+      stopCamera()
+    }
+    setIsCapturing(false)
+  }
+
+  const handleRetake = async () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(null)
+      capturedBlobRef.current = null
+    }
+    await startCamera()
+  }
+
+  const handleConfirm = async () => {
+    if (!capturedBlobRef.current) return
+
+    const blob = capturedBlobRef.current
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const base64data = reader.result as string
       sessionStorage.setItem('pendingImage', JSON.stringify({
-        blob: imageUrl,
+        blob: base64data,
         type: 'image/jpeg',
         source: 'camera',
       }))
-      stopCamera()
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
       navigate('/loading')
-    } else {
-      setIsCapturing(false)
     }
+    reader.readAsDataURL(blob)
   }
 
-  const handleClose = () => {
-    stopCamera()
-    navigate('/welcome')
+  const handleClose = async () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(null)
+      capturedBlobRef.current = null
+      await startCamera()
+    } else {
+      stopCamera()
+      navigate('/welcome')
+    }
   }
 
   if (!isSupported) {
@@ -66,13 +107,25 @@ export default function CameraPage() {
   return (
     <div className="fixed inset-0 bg-black z-50">
       <div className="absolute inset-0">
-        <CameraView videoRef={videoRef} stream={stream} />
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt="Preview"
+            className="w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
+          />
+        ) : (
+          <CameraView videoRef={videoRef} stream={stream} />
+        )}
       </div>
       <CameraControls
         onCapture={handleCapture}
         onClose={handleClose}
-        onSwitch={switchCamera}
+        onSwitch={previewUrl ? undefined : switchCamera}
         isCapturing={isCapturing}
+        isPreview={!!previewUrl}
+        onRetake={handleRetake}
+        onConfirm={handleConfirm}
       />
     </div>
   )

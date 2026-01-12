@@ -6,12 +6,14 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { getMockScan, getMockImageUrl } from '@/lib/mockData'
 import type { GetScanResponse } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
+import { useTextSelection } from '@/hooks/useTextSelection'
 
 export default function ScanPage() {
   const { id } = useParams<{ id: string }>()
   const [scanData, setScanData] = useState<GetScanResponse | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const { toast } = useToast()
+  const { selectedText, handleSelection, clearSelection } = useTextSelection()
 
   useEffect(() => {
     if (id) {
@@ -26,12 +28,23 @@ export default function ScanPage() {
     }
   }, [id])
 
+  const handleTextSelect = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.toString().trim() === '') {
+      clearSelection()
+      return
+    }
+    handleSelection(selection.toString())
+  }
+
   const handleExplain = () => {
+    if (!selectedText) return
     toast({
       title: "Text saved",
       description: "Saved text to Highlight and will receive an explanation",
       duration: 3000,
     })
+    clearSelection()
   }
 
   if (!scanData || !scanData.ocrResult) {
@@ -59,12 +72,16 @@ export default function ScanPage() {
               className="w-full mb-6 rounded-lg"
             />
           )}
-          <p className="text-base leading-relaxed text-gray-900 whitespace-pre-wrap">
+          <p
+            className="text-base leading-relaxed text-gray-900 whitespace-pre-wrap"
+            onMouseUp={handleTextSelect}
+            onTouchEnd={handleTextSelect}
+          >
             {ocrResult.rawText}
           </p>
         </div>
       </ScrollArea>
-      <BottomActionBar onExplain={handleExplain} />
+      <BottomActionBar disabled={!selectedText} onExplain={handleExplain} />
     </div>
   )
 }

@@ -13,25 +13,25 @@ export default function BottomActionBar({
   onBookmark,
 }: BottomActionBarProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-inset-bottom">
-      <div className="flex items-center justify-between px-4 py-3 max-w-md mx-auto gap-4">
-        <Button
-          onClick={onExplain}
-          disabled={disabled}
-          className="flex-1 bg-gray-900 text-white hover:bg-gray-800 rounded-lg px-6 py-3 h-auto"
-        >
-          <Sparkles className="w-5 h-5 mr-2" />
-          Explain this
-        </Button>
-        <button
-          onClick={onBookmark}
-          disabled={disabled}
-          className="p-2 disabled:opacity-50"
-          aria-label="Bookmark"
-        >
-          <Bookmark className="w-6 h-6 text-gray-900" />
-        </button>
-      </div>
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[348px] h-[72px] bg-white border border-[#F1F5F9] rounded-[16px] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] px-8 py-4 flex items-center gap-6 z-50">
+      <Button
+        onClick={onExplain}
+        disabled={disabled}
+        variant="default"
+        className="flex-1"
+      >
+        <Sparkles className="w-5 h-5" />
+        Explain this
+      </Button>
+
+      <button
+        onClick={onBookmark}
+        disabled={disabled}
+        className="w-10 h-10 rounded-[12px] flex items-center justify-center bg-white text-[#0F172A] border border-[#F1F5F9] disabled:opacity-50 transition-colors"
+        aria-label="Bookmark"
+      >
+        <Bookmark className="w-5 h-5" />
+      </button>
     </div>
   )
 }

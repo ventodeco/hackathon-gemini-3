@@ -1,116 +1,70 @@
 import { useParams } from 'react-router-dom'
-import { useScan } from '@/hooks/useScan'
-import ScanImage from '@/components/scanpage/ScanImage'
-import TextPreview from '@/components/scanpage/TextPreview'
-import LoadingSpinner from '@/components/scanpage/LoadingSpinner'
-import ErrorAlert from '@/components/scanpage/ErrorAlert'
-import { Card, CardContent } from '@/components/ui/card'
+import { useEffect, useState } from 'react'
+import Header from '@/components/layout/Header'
+import BottomActionBar from '@/components/layout/BottomActionBar'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { getMockScan, getMockImageUrl } from '@/lib/mockData'
+import type { GetScanResponse } from '@/lib/types'
+import { useToast } from '@/hooks/use-toast'
 
 export default function ScanPage() {
   const { id } = useParams<{ id: string }>()
-  const { data, isLoading, error, refetch } = useScan(id, !!id)
+  const [scanData, setScanData] = useState<GetScanResponse | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const { toast } = useToast()
 
-  if (isLoading && !data) {
+  useEffect(() => {
+    if (id) {
+      const mockScan = getMockScan(id)
+      if (mockScan) {
+        setScanData(mockScan)
+        const url = getMockImageUrl(id)
+        if (url) {
+          setImageUrl(url)
+        }
+      }
+    }
+  }, [id])
+
+  const handleExplain = () => {
+    toast({
+      title: "Text saved",
+      description: "Saved text to Highlight and will receive an explanation",
+      duration: 3000,
+    })
+  }
+
+  if (!scanData || !scanData.ocrResult) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <LoadingSpinner message="Loading scan..." />
+      <div className="min-h-screen bg-white flex flex-col">
+        <Header title="Scan Result" />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <p className="text-gray-600">Scan not found</p>
         </div>
       </div>
     )
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <ErrorAlert
-            title="Error"
-            message={error instanceof Error ? error.message : 'Failed to load scan'}
-            onRetry={() => refetch()}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <ErrorAlert title="Not Found" message="Scan not found" />
-        </div>
-      </div>
-    )
-  }
-
-  const { scan, ocrResult, status } = data
-
-  if (status === 'failed_overloaded') {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <ErrorAlert
-            title="Service Temporarily Unavailable"
-            message="The OCR service is currently overloaded. Please wait a moment and try uploading the image again."
-            onRetry={() => refetch()}
-            retryLabel="Retry Now"
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (status === 'failed_auth') {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <ErrorAlert
-            title="Authentication Error"
-            message="There was an issue with the API key. Please check your GEMINI_API_KEY configuration."
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (status === 'failed') {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <ErrorAlert
-            title="OCR Processing Failed"
-            message="The OCR service encountered an error. Please try uploading the image again."
-            onRetry={() => refetch()}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  if (status === 'uploaded' || !ocrResult) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto pt-8">
-          <Card>
-            <CardContent className="pt-6">
-              <LoadingSpinner message="OCR processing in progress..." />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
+  const { ocrResult } = scanData
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-2xl mx-auto pt-8">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900">Extracted Text</h1>
-        
-        <ScanImage scanID={scan.id} />
-        
-        <TextPreview text={ocrResult.rawText} scanID={scan.id} />
-      </div>
+    <div className="min-h-screen bg-white flex flex-col pb-20">
+      <Header title="Scan Result" />
+      <ScrollArea className="flex-1">
+        <div className="p-6">
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt="Scanned document"
+              className="w-full mb-6 rounded-lg"
+            />
+          )}
+          <p className="text-base leading-relaxed text-gray-900 whitespace-pre-wrap">
+            {ocrResult.rawText}
+          </p>
+        </div>
+      </ScrollArea>
+      <BottomActionBar onExplain={handleExplain} />
     </div>
   )
 }

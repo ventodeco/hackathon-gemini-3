@@ -4,15 +4,18 @@ import Header from '@/components/layout/Header'
 import BottomActionBar from '@/components/layout/BottomActionBar'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { getMockScan, getMockImageUrl } from '@/lib/mockData'
-import type { GetScanResponse } from '@/lib/types'
-import { useToast } from '@/hooks/use-toast'
+import type { GetScanResponse, Annotation } from '@/lib/types'
 import { useTextSelection } from '@/hooks/useTextSelection'
+import { AnnotationDrawer } from '@/components/scanpage/AnnotationDrawer'
+import { getMockAnnotation } from '@/lib/mockAnnotations'
 
 export default function ScanPage() {
   const { id } = useParams<{ id: string }>()
   const [scanData, setScanData] = useState<GetScanResponse | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const { toast } = useToast()
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [currentAnnotation, setCurrentAnnotation] = useState<Annotation | null>(null)
+  const [isLoadingAnnotation, setIsLoadingAnnotation] = useState(false)
   const { selectedText, handleSelection, clearSelection } = useTextSelection()
 
   useEffect(() => {
@@ -37,13 +40,22 @@ export default function ScanPage() {
     handleSelection(selection.toString())
   }
 
-  const handleExplain = () => {
+  const handleExplain = async () => {
     if (!selectedText) return
-    toast({
-      title: "Text saved",
-      description: "Saved text to Highlight and will receive an explanation",
-      duration: 3000,
-    })
+    
+    setIsLoadingAnnotation(true)
+    
+    setTimeout(() => {
+      const mockAnnotation = getMockAnnotation(selectedText)
+      setCurrentAnnotation(mockAnnotation)
+      setIsLoadingAnnotation(false)
+      setIsDrawerOpen(true)
+    }, 500)
+  }
+
+  const handleDrawerClose = () => {
+    setIsDrawerOpen(false)
+    setCurrentAnnotation(null)
     clearSelection()
   }
 
@@ -81,7 +93,16 @@ export default function ScanPage() {
           </p>
         </div>
       </ScrollArea>
-      <BottomActionBar disabled={!selectedText} onExplain={handleExplain} />
+      <BottomActionBar 
+        disabled={!selectedText || isLoadingAnnotation}
+        isLoading={isLoadingAnnotation}
+        onExplain={handleExplain} 
+      />
+      <AnnotationDrawer
+        isOpen={isDrawerOpen}
+        onClose={handleDrawerClose}
+        annotation={currentAnnotation}
+      />
     </div>
   )
 }

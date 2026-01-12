@@ -52,7 +52,7 @@ export function createMockScan(imageBlob: string, source: 'camera' | 'upload'): 
   
   if (typeof window !== 'undefined') {
     const scans = JSON.parse(sessionStorage.getItem('mockScans') || '[]')
-    scans.push({ id, imageBlob, source })
+    scans.push({ id, scanData: mockScan, imageBlob })
     sessionStorage.setItem('mockScans', JSON.stringify(scans))
   }
 
@@ -60,7 +60,21 @@ export function createMockScan(imageBlob: string, source: 'camera' | 'upload'): 
 }
 
 export function getMockScan(id: string): GetScanResponse | null {
-  return mockScans.get(id) || null
+  const cached = mockScans.get(id)
+  if (cached) {
+    return cached
+  }
+
+  if (typeof window !== 'undefined') {
+    const scans = JSON.parse(sessionStorage.getItem('mockScans') || '[]')
+    const stored = scans.find((s: { id: string; scanData: GetScanResponse }) => s.id === id)
+    if (stored?.scanData) {
+      mockScans.set(id, stored.scanData)
+      return stored.scanData
+    }
+  }
+
+  return null
 }
 
 export function getAllMockScans(): GetScanResponse[] {

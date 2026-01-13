@@ -156,6 +156,20 @@ describe('Button', () => {
 });
 ```
 
+## Task Completion
+
+Before marking any task as complete, always run the following quality checks:
+
+### ESLint
+
+Run ESLint to ensure there are no errors or warnings:
+
+```bash
+cd web && bun run lint
+```
+
+Fix any reported issues before considering the task complete.
+
 ## Project Structure
 
 ```

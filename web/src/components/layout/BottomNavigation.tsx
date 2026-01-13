@@ -5,6 +5,7 @@ import logo from '@/assets/logo.svg'
 export default function BottomNavigation() {
   const location = useLocation()
   const isHome = location.pathname === '/welcome' || location.pathname === '/'
+  const isHistory = location.pathname === '/history'
 
   return (
     <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[348px] h-[72px] bg-white border border-[#F1F5F9] rounded-[16px] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] px-8 py-4 flex items-center gap-6 z-50">
@@ -26,7 +27,7 @@ export default function BottomNavigation() {
         <Link 
           to="/history"
           className={`w-10 h-10 rounded-[12px] flex items-center justify-center transition-colors ${
-            !isHome ? 'bg-[#0F172A] text-white' : 'bg-white text-[#0F172A]'
+            isHistory ? 'bg-[#0F172A] text-white' : 'bg-white text-[#0F172A]'
           }`}
         >
           <Newspaper className="w-5 h-5" />

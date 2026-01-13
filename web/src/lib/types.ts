@@ -25,6 +25,7 @@ export interface Annotation {
   selectedText: string
   selectionStart?: number
   selectionEnd?: number
+  context: string
   meaning: string
   usageExample: string
   whenToUse: string

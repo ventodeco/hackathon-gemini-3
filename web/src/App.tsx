@@ -5,6 +5,7 @@ import WelcomePage from './pages/WelcomePage'
 import CameraPage from './pages/CameraPage'
 import LoadingPage from './pages/LoadingPage'
 import ScanPage from './pages/ScanPage'
+import HistoryPage from './pages/HistoryPage'
 import NotFoundPage from './pages/NotFoundPage'
 import { Toaster } from './components/ui/sonner'
 
@@ -49,6 +50,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <LoadingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <HistoryPage />
               </ProtectedRoute>
             }
           />

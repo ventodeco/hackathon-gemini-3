@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import { BookmarkCard } from '../BookmarkCard'
 import type { Annotation } from '@/lib/types'
@@ -14,7 +14,7 @@ vi.mock('sonner', () => ({
 
 let mockGetMockScan = vi.fn(() => null)
 vi.mock('@/lib/mockData', () => ({
-  getMockScan: (...args: unknown[]) => mockGetMockScan(...args),
+  getMockScan: (...args: Parameters<typeof mockGetMockScan>) => mockGetMockScan(...args),
 }))
 
 const mockAnnotation: Annotation = {

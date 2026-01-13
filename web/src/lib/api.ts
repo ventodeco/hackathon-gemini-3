@@ -2,7 +2,7 @@ import type {
   CreateScanResponse,
   GetScanResponse,
   AnnotateRequest,
-  AnnotateResponse,
+  Annotation,
 } from './types'
 
 export type { AnnotateRequest }
@@ -43,7 +43,7 @@ export async function getScan(scanID: string): Promise<GetScanResponse> {
 export async function annotate(
   scanID: string,
   request: AnnotateRequest,
-): Promise<AnnotateResponse> {
+): Promise<Annotation> {
   const response = await fetch(`${API_BASE_URL}/scans/${scanID}/annotate`, {
     method: 'POST',
     headers: {

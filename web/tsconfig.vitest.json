@@ -2,7 +2,11 @@
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/test/**/*", "src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__tests__/*.ts", "src/**/__tests__/*.tsx"]
 }

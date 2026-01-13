@@ -52,5 +52,5 @@ export interface AnnotateRequest {
   selectedText: string
 }
 
-// AnnotateResponse type is used by the API client
-export type { Annotation }
+// AnnotateResponse is an alias for Annotation
+export type AnnotateResponse = Annotation

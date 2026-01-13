@@ -56,3 +56,14 @@ type Annotation struct {
 	PromptVersion      string
 	CreatedAt          time.Time
 }
+
+type V1Scan struct {
+	ID              string
+	UserID          *string
+	ImageURL        string
+	FullOCRText     *string
+	DetectedLanguage *string
+	StoragePath     string
+	MimeType        string
+	CreatedAt       time.Time
+}

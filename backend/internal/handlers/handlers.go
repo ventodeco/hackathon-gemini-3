@@ -2,8 +2,7 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -15,12 +14,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gemini-hackathon/app/internal/config"
 	"github.com/gemini-hackathon/app/internal/gemini"
 	"github.com/gemini-hackathon/app/internal/middleware"
 	"github.com/gemini-hackathon/app/internal/models"
 	"github.com/gemini-hackathon/app/internal/storage"
 )
+
+//go:embed swagger/openapi.yaml
+var openAPISpec []byte
 
 type Handlers struct {
 	db          storage.DB
@@ -33,7 +37,7 @@ type Handlers struct {
 func NewHandlers(db storage.DB, fileStorage storage.FileStorage, geminiClient gemini.Client, cfg *config.Config) (*Handlers, error) {
 	tmpl, err := loadTemplates()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load templates: %w", err)
+		tmpl = nil
 	}
 
 	return &Handlers{
@@ -292,9 +296,18 @@ func (h *Handlers) Annotate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func extractScanIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) >= 2 && (parts[0] == "api" || parts[0] == "v1") && parts[1] == "scans" {
+		if len(parts) >= 3 {
+			return parts[2]
+		}
+	}
+	return ""
+}
+
 func (h *Handlers) GetScanImage(w http.ResponseWriter, r *http.Request) {
-	scanID := strings.TrimPrefix(r.URL.Path, "/scans/")
-	scanID = strings.TrimSuffix(scanID, "/image")
+	scanID := extractScanIDFromPath(r.URL.Path)
 	if scanID == "" {
 		http.Error(w, "Scan ID required", http.StatusBadRequest)
 		return
@@ -323,6 +336,47 @@ func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func (h *Handlers) SwaggerOpenAPIYAML(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/yaml")
+	w.WriteHeader(http.StatusOK)
+	w.Write(openAPISpec)
+}
+
+func (h *Handlers) SwaggerUI(w http.ResponseWriter, r *http.Request) {
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="SwaggerUI" />
+  <title>SwaggerUI - Gemini OCR API</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
+<script>
+  window.onload = () => {
+    window.ui = SwaggerUIBundle({
+      url: '/swagger/openapi.yaml',
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      layout: "StandaloneLayout",
+      validatorUrl: null
+    });
+  };
+</script>
+</body>
+</html>`
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(html))
+}
+
 func (h *Handlers) setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -348,6 +402,18 @@ type AnnotateAPIRequest struct {
 type ErrorAPIResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
+}
+
+type CreateScanV1Response struct {
+	ScanID   string `json:"scanId"`
+	FullText string `json:"fullText"`
+	ImageURL string `json:"imageUrl"`
+}
+
+type GetScanV1Response struct {
+	ID       string `json:"id"`
+	FullText string `json:"fullText"`
+	ImageURL string `json:"imageUrl"`
 }
 
 func (h *Handlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
@@ -569,6 +635,170 @@ func (h *Handlers) writeJSONError(w http.ResponseWriter, statusCode int, message
 	})
 }
 
+func (h *Handlers) CreateScanV1(w http.ResponseWriter, r *http.Request) {
+	h.setCORSHeaders(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		h.writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	if err := r.ParseMultipartForm(h.config.MaxUploadSize); err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, "Failed to parse form")
+		return
+	}
+
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, "Please select an image to upload")
+		return
+	}
+	defer file.Close()
+
+	mimeType := header.Header.Get("Content-Type")
+	if !isValidImageType(mimeType) {
+		h.writeJSONError(w, http.StatusBadRequest, "Invalid image type. Please use JPEG, PNG, or WebP.")
+		return
+	}
+
+	if header.Size > h.config.MaxUploadSize {
+		h.writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("File too large. Maximum size is %v MB.", h.config.MaxUploadSize/(1024*1024)))
+		return
+	}
+
+	imageData, err := io.ReadAll(file)
+	if err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, "Failed to read uploaded file")
+		return
+	}
+
+	if len(imageData) == 0 {
+		h.writeJSONError(w, http.StatusBadRequest, "Empty file")
+		return
+	}
+
+	scanID := generateID()
+	now := time.Now()
+
+	storagePath, _, err := h.fileStorage.SaveImage(scanID, imageData, mimeType)
+	if err != nil {
+		log.Printf("Failed to save image: %v", err)
+		h.writeJSONError(w, http.StatusInternalServerError, "Failed to save uploaded image")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	ocrResp, err := h.geminiClient.OCR(ctx, imageData, mimeType)
+	if err != nil {
+		log.Printf("OCR failed for scan %s: %v", scanID, err)
+		h.writeJSONError(w, http.StatusInternalServerError, "Failed to process image")
+		return
+	}
+
+	fullText := ocrResp.RawText
+	if fullText == "" {
+		fullText = ""
+	}
+
+	imageURL := fmt.Sprintf("/v1/scans/%s/image", scanID)
+	detectedLanguage := ocrResp.Language
+
+	v1Scan := &models.V1Scan{
+		ID:              scanID,
+		UserID:          nil,
+		ImageURL:        imageURL,
+		FullOCRText:     &fullText,
+		DetectedLanguage: &detectedLanguage,
+		StoragePath:     storagePath,
+		MimeType:        mimeType,
+		CreatedAt:       now,
+	}
+
+	if err := h.db.CreateV1Scan(ctx, v1Scan); err != nil {
+		log.Printf("Failed to create v1 scan: %v", err)
+		h.writeJSONError(w, http.StatusInternalServerError, "Failed to save scan")
+		return
+	}
+
+	response := CreateScanV1Response{
+		ScanID:   scanID,
+		FullText: fullText,
+		ImageURL: imageURL,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handlers) GetScanV1(w http.ResponseWriter, r *http.Request) {
+	h.setCORSHeaders(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/v1/scans/")
+	parts := strings.Split(path, "/")
+	scanID := parts[0]
+	if scanID == "" {
+		h.writeJSONError(w, http.StatusBadRequest, "Scan ID required")
+		return
+	}
+
+	v1Scan, err := h.db.GetV1Scan(r.Context(), scanID)
+	if err != nil {
+		log.Printf("GetV1Scan error for scan %s: %v", scanID, err)
+		h.writeJSONError(w, http.StatusNotFound, "Scan not found")
+		return
+	}
+
+	fullText := ""
+	if v1Scan.FullOCRText != nil {
+		fullText = *v1Scan.FullOCRText
+	}
+
+	response := GetScanV1Response{
+		ID:       v1Scan.ID,
+		FullText: fullText,
+		ImageURL: v1Scan.ImageURL,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handlers) GetScanV1Image(w http.ResponseWriter, r *http.Request) {
+	scanID := extractScanIDFromPath(r.URL.Path)
+	if scanID == "" {
+		http.Error(w, "Scan ID required", http.StatusBadRequest)
+		return
+	}
+
+	v1Scan, err := h.db.GetV1Scan(r.Context(), scanID)
+	if err != nil {
+		http.Error(w, "Image not found", http.StatusNotFound)
+		return
+	}
+
+	data, err := h.fileStorage.OpenImage(v1Scan.StoragePath)
+	if err != nil {
+		log.Printf("Failed to open image %s: %v", v1Scan.StoragePath, err)
+		http.Error(w, "Failed to load image", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", v1Scan.MimeType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	w.Write(data)
+}
+
 func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []byte, mimeType string) {
 	// #region agent log
 	writeDebugLog := func(location, message string, hypothesisId string, data map[string]interface{}) {
@@ -716,9 +946,7 @@ func isValidImageType(mimeType string) bool {
 }
 
 func generateID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	return uuid.New().String()
 }
 
 func loadTemplates() (*template.Template, error) {

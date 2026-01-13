@@ -255,7 +255,7 @@ Return only valid JSON, no markdown formatting.`, ocrText, selectedText)
 
 func isOverloadedError(err error) bool {
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "503") || strings.Contains(msg, "unavailable") || strings.Contains(msg, "overloaded")
+	return strings.Contains(msg, "503") || strings.Contains(msg, "unavailable") || strings.Contains(msg, "overloaded") || strings.Contains(msg, "429") || strings.Contains(msg, "rate limit")
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) bool {

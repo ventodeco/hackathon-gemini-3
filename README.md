@@ -169,6 +169,33 @@ gemini-hackathon/
 - `GET /api/scans/{id}/image` - Get scan image file
 - `GET /` - Serves React frontend (SPA)
 
+### V1 API Endpoints
+
+- `POST /v1/scans` - Create scan with synchronous OCR (returns scanId, fullText, imageUrl)
+- `GET /v1/scans/{id}` - Get scan details (id, fullText, imageUrl)
+- `GET /v1/scans/{id}/image` - Get scan image file
+
+## API Documentation
+
+Interactive API documentation is available via Swagger UI:
+
+- **Swagger UI**: `http://localhost:8080/swagger/` - Interactive API documentation with "Try it out" functionality
+- **OpenAPI Spec**: `http://localhost:8080/swagger/openapi.yaml` - Raw OpenAPI 3.0.4 specification
+
+The Swagger UI allows you to:
+- Browse all available API endpoints
+- View request/response schemas
+- Test endpoints directly from the browser
+- Upload images to test OCR functionality
+
+**To test OCR:**
+1. Start the backend server
+2. Open `http://localhost:8080/swagger/` in your browser
+3. Expand `POST /v1/scans`
+4. Click "Try it out"
+5. Upload an image file (JPEG, PNG, or WebP)
+6. Click "Execute" to see the OCR result
+
 ## Database
 
 The application uses SQLite for data persistence. The database file is created automatically at the path specified in `DB_PATH` (default: `data/app.db`).

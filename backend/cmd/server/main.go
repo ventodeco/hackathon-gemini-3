@@ -33,7 +33,7 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := storage.RunMigrations(db, "backend/migrations"); err != nil {
+	if err := storage.RunMigrations(db, cfg.MigrationsDir); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
@@ -56,6 +56,9 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", h.Healthz)
+
+	mux.HandleFunc("/swagger/openapi.yaml", h.SwaggerOpenAPIYAML)
+	mux.HandleFunc("/swagger/", h.SwaggerUI)
 
 	mux.HandleFunc("/api/scans", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -100,15 +103,48 @@ func main() {
 		http.NotFound(w, r)
 	})
 
-	reactFS := http.FileServer(http.Dir("web/dist"))
+	mux.HandleFunc("/v1/scans", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.CreateScanV1(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/v1/scans/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/v1/scans/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 1 && parts[0] != "" {
+			if r.Method == http.MethodGet {
+				h.GetScanV1(w, r)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		if len(parts) == 2 && parts[1] == "image" {
+			if r.Method == http.MethodGet {
+				h.GetScanV1Image(w, r)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		http.NotFound(w, r)
+	})
+
+	reactFS := http.FileServer(http.Dir(cfg.StaticDir))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/v1/") || strings.HasPrefix(r.URL.Path, "/swagger/") {
 			http.NotFound(w, r)
 			return
 		}
 
-		if _, err := os.Stat("web/dist/index.html"); err == nil {
-			if r.URL.Path != "/" && !strings.HasPrefix(r.URL.Path, "/api/") {
+		if _, err := os.Stat(filepath.Join(cfg.StaticDir, "index.html")); err == nil {
+			if r.URL.Path != "/" && !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/v1/") && !strings.HasPrefix(r.URL.Path, "/swagger/") {
 				r.URL.Path = "/"
 			}
 			reactFS.ServeHTTP(w, r)

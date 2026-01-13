@@ -51,6 +51,8 @@ type MockDB struct {
 	GetOCRResultFunc             func(ctx context.Context, scanID string) (*models.OCRResult, error)
 	CreateAnnotationFunc         func(ctx context.Context, annotation *models.Annotation) error
 	GetAnnotationsByScanIDFunc  func(ctx context.Context, scanID string) ([]*models.Annotation, error)
+	CreateV1ScanFunc             func(ctx context.Context, scan *models.V1Scan) error
+	GetV1ScanFunc                func(ctx context.Context, id string) (*models.V1Scan, error)
 }
 
 func (m *MockDB) CreateSession(ctx context.Context, session *models.Session) error {
@@ -142,6 +144,20 @@ func (m *MockDB) GetAnnotationsByScanID(ctx context.Context, scanID string) ([]*
 		return m.GetAnnotationsByScanIDFunc(ctx, scanID)
 	}
 	return nil, nil
+}
+
+func (m *MockDB) CreateV1Scan(ctx context.Context, scan *models.V1Scan) error {
+	if m.CreateV1ScanFunc != nil {
+		return m.CreateV1ScanFunc(ctx, scan)
+	}
+	return nil
+}
+
+func (m *MockDB) GetV1Scan(ctx context.Context, id string) (*models.V1Scan, error) {
+	if m.GetV1ScanFunc != nil {
+		return m.GetV1ScanFunc(ctx, id)
+	}
+	return nil, errors.New("v1 scan not found")
 }
 
 type MockFileStorage struct {

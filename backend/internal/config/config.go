@@ -9,14 +9,16 @@ import (
 )
 
 type Config struct {
-	GeminiAPIKey     string
-	AppBaseURL       string
-	Port             string
-	DBPath           string
-	UploadDir        string
-	MaxUploadSize    int64
+	GeminiAPIKey      string
+	AppBaseURL        string
+	Port              string
+	DBPath            string
+	MigrationsDir     string
+	StaticDir         string
+	UploadDir         string
+	MaxUploadSize     int64
 	SessionCookieName string
-	SessionSecure    bool
+	SessionSecure     bool
 }
 
 func Load() (*Config, error) {
@@ -33,10 +35,26 @@ func Load() (*Config, error) {
 		AppBaseURL:        getEnvOrDefault("APP_BASE_URL", "http://localhost:8080"),
 		Port:              getEnvOrDefault("PORT", "8080"),
 		DBPath:            getEnvOrDefault("DB_PATH", "data/app.db"),
+		MigrationsDir:     getEnvOrDefault("MIGRATIONS_DIR", "backend/migrations"),
+		StaticDir:         getEnvOrDefault("STATIC_DIR", "web/dist"),
 		UploadDir:         getEnvOrDefault("UPLOAD_DIR", "data/uploads"),
 		MaxUploadSize:     getEnvAsInt64OrDefault("MAX_UPLOAD_SIZE", 10*1024*1024),
 		SessionCookieName: getEnvOrDefault("SESSION_COOKIE_NAME", "sid"),
-		SessionSecure:     getEnvAsBoolOrDefault("SESSION_SECURE", false),
+		SessionSecure:     getEnvAsBoolOrDefault("SessionSecure", false),
+	}
+
+	// Try to find migrations if default doesn't exist
+	if _, err := os.Stat(cfg.MigrationsDir); os.IsNotExist(err) {
+		if _, err := os.Stat("migrations"); err == nil {
+			cfg.MigrationsDir = "migrations"
+		}
+	}
+
+	// Try to find static files if default doesn't exist
+	if _, err := os.Stat(cfg.StaticDir); os.IsNotExist(err) {
+		if _, err := os.Stat("../web/dist"); err == nil {
+			cfg.StaticDir = "../web/dist"
+		}
 	}
 
 	if err := cfg.Validate(); err != nil {

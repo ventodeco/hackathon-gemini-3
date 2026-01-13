@@ -1,0 +1,161 @@
+openapi: 3.1.0
+info:
+  title: Gemini OCR+Annotation API
+  description: API for OCR scanning and text annotation of Japanese text
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /v1/scans:
+    post:
+      summary: Create a new scan with OCR
+      description: Upload an image and receive OCR text synchronously
+      operationId: createScanV1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file (JPEG, PNG, or WebP)
+            encoding:
+              image:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        '201':
+          description: Scan created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - scanId
+                  - fullText
+                  - imageUrl
+                properties:
+                  scanId:
+                    type: string
+                    format: uuid
+                    description: UUID v4 identifier for the scan
+                  fullText:
+                    type: string
+                    description: Extracted OCR text from the image
+                  imageUrl:
+                    type: string
+                    description: URL to retrieve the uploaded image
+                    example: /v1/scans/123e4567-e89b-12d3-a456-426614174000/image
+        '400':
+          description: Bad request (invalid image type, missing file, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/scans/{id}:
+    get:
+      summary: Get scan details
+      description: Retrieve scan information including OCR text
+      operationId: getScanV1
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Scan ID (UUID v4)
+      responses:
+        '200':
+          description: Scan details
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - fullText
+                  - imageUrl
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: Scan ID
+                  fullText:
+                    type: string
+                    description: Extracted OCR text
+                  imageUrl:
+                    type: string
+                    description: URL to retrieve the image
+        '404':
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/scans/{id}/image:
+    get:
+      summary: Get scan image
+      description: Retrieve the uploaded image file
+      operationId: getScanV1Image
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Scan ID (UUID v4)
+      responses:
+        '200':
+          description: Image file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: HTTP status text
+        message:
+          type: string
+          description: Error message

@@ -26,6 +26,9 @@ type DB interface {
 
 	CreateAnnotation(ctx context.Context, annotation *models.Annotation) error
 	GetAnnotationsByScanID(ctx context.Context, scanID string) ([]*models.Annotation, error)
+
+	CreateV1Scan(ctx context.Context, scan *models.V1Scan) error
+	GetV1Scan(ctx context.Context, id string) (*models.V1Scan, error)
 }
 
 type sqliteDB struct {
@@ -385,4 +388,67 @@ func (s *sqliteDB) GetAnnotationsByScanID(ctx context.Context, scanID string) ([
 	}
 
 	return annotations, rows.Err()
+}
+
+func (s *sqliteDB) CreateV1Scan(ctx context.Context, scan *models.V1Scan) error {
+	query := `
+		INSERT INTO v1_scans (id, user_id, image_url, full_ocr_text, detected_language, storage_path, mime_type, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := s.db.ExecContext(ctx, query,
+		scan.ID,
+		scan.UserID,
+		scan.ImageURL,
+		scan.FullOCRText,
+		scan.DetectedLanguage,
+		scan.StoragePath,
+		scan.MimeType,
+		scan.CreatedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+func (s *sqliteDB) GetV1Scan(ctx context.Context, id string) (*models.V1Scan, error) {
+	query := `
+		SELECT id, user_id, image_url, full_ocr_text, detected_language, storage_path, mime_type, created_at
+		FROM v1_scans
+		WHERE id = ?
+	`
+	var scan models.V1Scan
+	var userID sql.NullString
+	var fullOCRText sql.NullString
+	var detectedLanguage sql.NullString
+	var createdAtStr string
+
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&scan.ID,
+		&userID,
+		&scan.ImageURL,
+		&fullOCRText,
+		&detectedLanguage,
+		&scan.StoragePath,
+		&scan.MimeType,
+		&createdAtStr,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if userID.Valid {
+		scan.UserID = &userID.String
+	}
+	if fullOCRText.Valid {
+		scan.FullOCRText = &fullOCRText.String
+	}
+	if detectedLanguage.Valid {
+		scan.DetectedLanguage = &detectedLanguage.String
+	}
+
+	createdAt, err := time.Parse(time.RFC3339, createdAtStr)
+	if err != nil {
+		return nil, err
+	}
+	scan.CreatedAt = createdAt
+
+	return &scan, nil
 }

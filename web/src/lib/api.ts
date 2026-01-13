@@ -7,7 +7,7 @@ import type {
 
 export type { AnnotateRequest }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/v1'
 
 export async function createScan(imageFile: File): Promise<CreateScanResponse> {
   const formData = new FormData()
@@ -19,8 +19,8 @@ export async function createScan(imageFile: File): Promise<CreateScanResponse> {
   })
 
   if (!response.ok) {
-    const error = await response.text()
-    throw new Error(error || 'Failed to create scan')
+    const errorData = await response.json().catch(() => ({ message: 'Request failed' }))
+    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
   }
 
   return response.json()
@@ -33,8 +33,8 @@ export async function getScan(scanID: string): Promise<GetScanResponse> {
     if (response.status === 404) {
       throw new Error('Scan not found')
     }
-    const error = await response.text()
-    throw new Error(error || 'Failed to get scan')
+    const errorData = await response.json().catch(() => ({ message: 'Request failed' }))
+    throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
   }
 
   return response.json()

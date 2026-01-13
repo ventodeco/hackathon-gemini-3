@@ -20,13 +20,17 @@ export default function WelcomePage() {
     const file = e.target.files?.[0]
     if (file) {
       if (file.type.startsWith('image/')) {
-        const blobUrl = URL.createObjectURL(file)
-        sessionStorage.setItem('pendingImage', JSON.stringify({
-          blob: blobUrl,
-          type: file.type,
-          source: 'upload',
-        }))
-        navigate('/loading')
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const base64data = reader.result as string
+          sessionStorage.setItem('pendingImage', JSON.stringify({
+            blob: base64data,
+            type: file.type,
+            source: 'upload',
+          }))
+          navigate('/loading')
+        }
+        reader.readAsDataURL(file)
       } else {
         alert('Please select an image file')
       }
@@ -76,7 +80,7 @@ export default function WelcomePage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         className="hidden"
         onChange={handleFileChange}
       />

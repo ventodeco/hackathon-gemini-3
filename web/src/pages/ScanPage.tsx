@@ -1,39 +1,59 @@
 import { useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Header from '@/components/layout/Header'
 import BottomActionBar from '@/components/layout/BottomActionBar'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { getMockScan, getMockImageUrl } from '@/lib/mockData'
-import type { GetScanResponse, Annotation } from '@/lib/types'
+import type { Annotation } from '@/lib/types'
+import { useScan } from '@/hooks/useScan'
 import { useTextSelection } from '@/hooks/useTextSelection'
 import { AnnotationDrawer } from '@/components/scanpage/AnnotationDrawer'
 import { getMockAnnotation } from '@/lib/mockAnnotations'
+import LoadingSpinner from '@/components/scanpage/LoadingSpinner'
+import ErrorAlert from '@/components/scanpage/ErrorAlert'
 
 export default function ScanPage() {
   const { id } = useParams<{ id: string }>()
-  const [scanData, setScanData] = useState<GetScanResponse | null>(null)
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const { data, isPending, isError, error } = useScan(id)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [currentAnnotation, setCurrentAnnotation] = useState<Annotation | null>(null)
   const [isLoadingAnnotation, setIsLoadingAnnotation] = useState(false)
   const { selectedText, handleSelection, clearSelection } = useTextSelection()
 
-  useEffect(() => {
-    if (!id) return
+  if (isPending) {
+    return (
+      <div className="flex min-h-screen flex-col bg-white">
+        <Header title="Scan Result" />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <LoadingSpinner />
+        </div>
+      </div>
+    )
+  }
 
-    const initializeScan = async () => {
-      const mockScan = getMockScan(id)
-      if (mockScan) {
-        setScanData(mockScan)
-        const url = getMockImageUrl(id)
-        if (url) {
-          setImageUrl(url)
-        }
-      }
-    }
+  if (isError) {
+    return (
+      <div className="flex min-h-screen flex-col bg-white">
+        <Header title="Scan Result" />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <ErrorAlert
+            title="Failed to load scan"
+            message={error instanceof Error ? error.message : 'Failed to load scan'}
+          />
+        </div>
+      </div>
+    )
+  }
 
-    initializeScan()
-  }, [id])
+  if (!data) {
+    return (
+      <div className="flex min-h-screen flex-col bg-white">
+        <Header title="Scan Result" />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <p className="text-gray-600">Scan not found</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleTextSelect = () => {
     const selection = window.getSelection()
@@ -63,18 +83,7 @@ export default function ScanPage() {
     clearSelection()
   }
 
-  if (!scanData || !scanData.ocrResult) {
-    return (
-      <div className="flex min-h-screen flex-col bg-white">
-        <Header title="Scan Result" />
-        <div className="flex flex-1 items-center justify-center p-6">
-          <p className="text-gray-600">Scan not found</p>
-        </div>
-      </div>
-    )
-  }
-
-  const { ocrResult } = scanData
+  const imageUrl = data.imageUrl
 
   return (
     <div className="flex min-h-screen flex-col bg-white pb-20">
@@ -93,7 +102,7 @@ export default function ScanPage() {
             onMouseUp={handleTextSelect}
             onTouchEnd={handleTextSelect}
           >
-            {ocrResult.rawText}
+            {data.fullText}
           </p>
         </div>
       </ScrollArea>

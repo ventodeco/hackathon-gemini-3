@@ -37,15 +37,15 @@ export interface Annotation {
 }
 
 export interface CreateScanResponse {
-  scanID: string
-  status: string
-  createdAt: string
+  scanId: string
+  fullText: string
+  imageUrl: string
 }
 
 export interface GetScanResponse {
-  scan: Scan
-  ocrResult: OCRResult | null
-  status: string
+  id: string
+  fullText: string
+  imageUrl: string
 }
 
 export interface AnnotateRequest {

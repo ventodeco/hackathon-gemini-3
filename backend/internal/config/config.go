@@ -9,19 +9,22 @@ import (
 )
 
 type Config struct {
-	GeminiAPIKey      string
-	AppBaseURL        string
-	Port              string
+	GeminiAPIKey       string
+	AppBaseURL         string
+	Port               string
 	DBConnectionString string
-	UploadDir         string
-	MaxUploadSize     int64
-	SessionCookieName string
-	SessionSecure     bool
+	UploadDir          string
+	MaxUploadSize      int64
+	SessionCookieName  string
+	SessionSecure      bool
 }
 
 func Load() (*Config, error) {
+	// Try loading from current directory and parent directory (project root)
 	loadEnvFile(".env.local")
+	loadEnvFile("../.env.local")
 	loadEnvFile(".env")
+	loadEnvFile("../.env")
 
 	geminiAPIKey := os.Getenv("GOOGLE_API_KEY")
 	if geminiAPIKey == "" {
@@ -38,7 +41,7 @@ func Load() (*Config, error) {
 		password := getEnvOrDefault("POSTGRES_PASSWORD", "gemini_password")
 		dbname := getEnvOrDefault("POSTGRES_DB", "gemini_db")
 		sslmode := getEnvOrDefault("POSTGRES_SSLMODE", "disable")
-		
+
 		if host != "" && port != "" && user != "" && password != "" && dbname != "" {
 			dbConnStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 				host, port, user, password, dbname, sslmode)
@@ -49,7 +52,7 @@ func Load() (*Config, error) {
 		GeminiAPIKey:       geminiAPIKey,
 		AppBaseURL:         getEnvOrDefault("APP_BASE_URL", "http://localhost:8080"),
 		Port:               getEnvOrDefault("PORT", "8080"),
-		DBConnectionString:  dbConnStr,
+		DBConnectionString: dbConnStr,
 		UploadDir:          getEnvOrDefault("UPLOAD_DIR", "data/uploads"),
 		MaxUploadSize:      getEnvAsInt64OrDefault("MAX_UPLOAD_SIZE", 10*1024*1024),
 		SessionCookieName:  getEnvOrDefault("SESSION_COOKIE_NAME", "sid"),
@@ -105,9 +108,23 @@ func getEnvAsBoolOrDefault(key string, defaultValue bool) bool {
 }
 
 func loadEnvFile(filename string) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return
+	// Try multiple locations: current dir, parent dir (project root)
+	paths := []string{
+		filename,         // Current directory
+		"../" + filename, // Parent directory (project root when running from backend/)
+	}
+
+	var file *os.File
+	var err error
+	for _, path := range paths {
+		file, err = os.Open(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if file == nil {
+		return // File not found in any location
 	}
 	defer file.Close()
 

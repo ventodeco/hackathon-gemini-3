@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 
-	if err := storage.RunMigrations(db, "backend/migrations"); err != nil {
+	if err := storage.RunMigrations(db, "migrations"); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 

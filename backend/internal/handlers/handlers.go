@@ -23,25 +23,28 @@ import (
 )
 
 type Handlers struct {
-	db          storage.DB
-	fileStorage storage.FileStorage
+	db           storage.DB
+	fileStorage  storage.FileStorage
 	geminiClient gemini.Client
-	config      *config.Config
-	templates   *template.Template
+	config       *config.Config
+	templates    *template.Template
 }
 
 func NewHandlers(db storage.DB, fileStorage storage.FileStorage, geminiClient gemini.Client, cfg *config.Config) (*Handlers, error) {
+	// Templates are optional - only load if they exist (for legacy HTML handlers)
+	// JSON API handlers don't need templates
 	tmpl, err := loadTemplates()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load templates: %w", err)
+		log.Printf("Warning: Templates not loaded (this is OK for JSON API): %v", err)
+		tmpl = nil
 	}
 
 	return &Handlers{
-		db:          db,
-		fileStorage: fileStorage,
+		db:           db,
+		fileStorage:  fileStorage,
 		geminiClient: geminiClient,
-		config:      cfg,
-		templates:   tmpl,
+		config:       cfg,
+		templates:    tmpl,
 	}, nil
 }
 
@@ -168,12 +171,12 @@ func (h *Handlers) GetScan(w http.ResponseWriter, r *http.Request) {
 		defer logFile.Close()
 		logData, marshalErr := json.Marshal(map[string]interface{}{
 			"sessionId":    "debug-session",
-			"runId":         "run1",
-			"hypothesisId":   hypothesisId,
-			"location":      location,
-			"message":       message,
-			"data":          data,
-			"timestamp":     time.Now().UnixMilli(),
+			"runId":        "run1",
+			"hypothesisId": hypothesisId,
+			"location":     location,
+			"message":      message,
+			"data":         data,
+			"timestamp":    time.Now().UnixMilli(),
 		})
 		if marshalErr != nil {
 			log.Printf("ERROR: Failed to marshal debug log: %v", marshalErr)
@@ -265,18 +268,18 @@ func (h *Handlers) Annotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	annotation := &models.Annotation{
-		ID:                 generateID(),
-		ScanID:             scanID,
-		OCRResultID:        ocrResult.ID,
-		SelectedText:       selectedText,
-		Meaning:            annotationResp.Meaning,
-		UsageExample:       annotationResp.UsageExample,
-		WhenToUse:          annotationResp.WhenToUse,
-		WordBreakdown:      annotationResp.WordBreakdown,
+		ID:                  generateID(),
+		ScanID:              scanID,
+		OCRResultID:         ocrResult.ID,
+		SelectedText:        selectedText,
+		Meaning:             annotationResp.Meaning,
+		UsageExample:        annotationResp.UsageExample,
+		WhenToUse:           annotationResp.WhenToUse,
+		WordBreakdown:       annotationResp.WordBreakdown,
 		AlternativeMeanings: annotationResp.AlternativeMeanings,
-		Model:              "gemini-2.5-flash",
-		PromptVersion:      "1.0",
-		CreatedAt:          time.Now(),
+		Model:               "gemini-2.5-flash",
+		PromptVersion:       "1.0",
+		CreatedAt:           time.Now(),
 	}
 
 	if err := h.db.CreateAnnotation(r.Context(), annotation); err != nil {
@@ -536,18 +539,18 @@ func (h *Handlers) AnnotateAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	annotation := &models.Annotation{
-		ID:                 generateID(),
-		ScanID:             scanID,
-		OCRResultID:        ocrResult.ID,
-		SelectedText:       selectedText,
-		Meaning:            annotationResp.Meaning,
-		UsageExample:       annotationResp.UsageExample,
-		WhenToUse:          annotationResp.WhenToUse,
-		WordBreakdown:      annotationResp.WordBreakdown,
+		ID:                  generateID(),
+		ScanID:              scanID,
+		OCRResultID:         ocrResult.ID,
+		SelectedText:        selectedText,
+		Meaning:             annotationResp.Meaning,
+		UsageExample:        annotationResp.UsageExample,
+		WhenToUse:           annotationResp.WhenToUse,
+		WordBreakdown:       annotationResp.WordBreakdown,
 		AlternativeMeanings: annotationResp.AlternativeMeanings,
-		Model:              "gemini-2.5-flash",
-		PromptVersion:      "1.0",
-		CreatedAt:          time.Now(),
+		Model:               "gemini-2.5-flash",
+		PromptVersion:       "1.0",
+		CreatedAt:           time.Now(),
 	}
 
 	if err := h.db.CreateAnnotation(r.Context(), annotation); err != nil {
@@ -586,12 +589,12 @@ func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []by
 		defer logFile.Close()
 		logData, marshalErr := json.Marshal(map[string]interface{}{
 			"sessionId":    "debug-session",
-			"runId":         "run1",
-			"hypothesisId":   hypothesisId,
-			"location":      location,
-			"message":       message,
-			"data":          data,
-			"timestamp":     time.Now().UnixMilli(),
+			"runId":        "run1",
+			"hypothesisId": hypothesisId,
+			"location":     location,
+			"message":      message,
+			"data":         data,
+			"timestamp":    time.Now().UnixMilli(),
 		})
 		if marshalErr != nil {
 			log.Printf("ERROR: Failed to marshal debug log: %v", marshalErr)
@@ -626,7 +629,7 @@ func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []by
 		// #endregion
 		log.Printf("OCR failed for scan %s: %v", scanID, err)
 		status := "failed"
-		
+
 		errMsgLower := strings.ToLower(errMsg)
 		// #region agent log
 		hasOverloaded := strings.Contains(errMsg, "503") ||
@@ -649,7 +652,7 @@ func (h *Handlers) processOCR(ctx context.Context, scanID string, imageData []by
 		} else {
 			log.Printf("DEBUG: No pattern matched for scan %s, keeping status as 'failed'", scanID)
 		}
-		
+
 		// #region agent log
 		writeDebugLog("handlers.go:329", "Before status update", "B", map[string]interface{}{"scanID": scanID, "status": status})
 		// #endregion

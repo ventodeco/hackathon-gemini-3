@@ -197,3 +197,14 @@ func (h *AnnotationHandlers) writeJSONError(w http.ResponseWriter, statusCode in
 		Message: message,
 	})
 }
+
+func (h *AnnotationHandlers) AnnotationsAPI(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.CreateAnnotationAPI(w, r)
+	case http.MethodGet:
+		h.GetAnnotationsAPI(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}

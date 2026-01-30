@@ -13,25 +13,26 @@ export default function OAuthCallbackPage() {
     const error = searchParams.get('error')
 
     if (error) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('error')
       return
     }
 
-    if (code) {
-      loginMutation.mutate(code, {
-        onSuccess: () => {
-          setStatus('success')
-          setTimeout(() => {
-            navigate('/welcome')
-          }, 1500)
-        },
-        onError: () => {
-          setStatus('error')
-        },
-      })
-    } else {
-      setStatus('error')
+    if (!code) {
+      return
     }
+
+    loginMutation.mutate(code, {
+      onSuccess: () => {
+        setStatus('success')
+        setTimeout(() => {
+          navigate('/welcome')
+        }, 1500)
+      },
+      onError: () => {
+        setStatus('error')
+      },
+    })
   }, [searchParams, loginMutation, navigate])
 
   return (

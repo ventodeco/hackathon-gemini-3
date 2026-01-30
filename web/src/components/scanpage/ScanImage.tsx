@@ -1,7 +1,7 @@
 import { getScanImageUrl } from '@/lib/api'
 
 interface ScanImageProps {
-  imageUrl: string
+  imageUrl?: string
   alt?: string
 }
 

@@ -24,7 +24,7 @@ describe('ScanImage', () => {
   })
 
   it('should return null when imageUrl is undefined', () => {
-    const { container } = render(<ScanImage imageUrl={undefined as any} />)
+    const { container } = render(<ScanImage imageUrl={undefined} />)
     expect(container).toBeEmptyDOMElement()
   })
 })

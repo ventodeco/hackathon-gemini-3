@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/gemini-hackathon/app/internal/config"
 	"github.com/gemini-hackathon/app/internal/gemini"
+	"github.com/gemini-hackathon/app/internal/logger"
 	"github.com/gemini-hackathon/app/internal/middleware"
 	"github.com/gemini-hackathon/app/internal/models"
 	"github.com/gemini-hackathon/app/internal/storage"
@@ -79,6 +79,8 @@ func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log := logger.GetDefaultLogger().WithRequestID(middleware.GetRequestID(r.Context()))
+
 	if r.Method != http.MethodPost {
 		h.writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -90,13 +92,17 @@ func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log = log.WithUserID(userID)
+
 	if err := r.ParseMultipartForm(h.config.MaxUploadSize); err != nil {
+		log.Warnf("Failed to parse multipart form: %v", err)
 		h.writeJSONError(w, http.StatusBadRequest, "Failed to parse form")
 		return
 	}
 
 	file, header, err := r.FormFile("image")
 	if err != nil {
+		log.Warnf("Failed to get image from form: %v", err)
 		h.writeJSONError(w, http.StatusBadRequest, "Please select an image to upload")
 		return
 	}
@@ -104,20 +110,25 @@ func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
 
 	mimeType := header.Header.Get("Content-Type")
 	if !isValidImageType(mimeType) {
+		log.Warnf("Invalid image type received: %s", mimeType)
 		h.writeJSONError(w, http.StatusBadRequest, "Invalid image type. Please use JPEG, PNG, or WebP.")
 		return
 	}
 
 	if header.Size > h.config.MaxUploadSize {
+		log.Warnf("Image size %d exceeds max size %d", header.Size, h.config.MaxUploadSize)
 		h.writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("File too large. Maximum size is %v MB.", h.config.MaxUploadSize/(1024*1024)))
 		return
 	}
 
 	imageData, err := io.ReadAll(file)
 	if err != nil {
+		log.ErrorWithErr(err, "Failed to read uploaded file")
 		h.writeJSONError(w, http.StatusBadRequest, "Failed to read uploaded file")
 		return
 	}
+
+	log.Infof("Received image upload: size=%d bytes, type=%s", len(imageData), mimeType)
 
 	now := time.Now()
 	scan := &models.Scan{
@@ -128,14 +139,14 @@ func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
 
 	scanID, err := h.db.CreateScan(r.Context(), scan)
 	if err != nil {
-		log.Printf("Failed to create scan: %v", err)
+		log.ErrorWithErr(err, "Failed to create scan in database")
 		h.writeJSONError(w, http.StatusInternalServerError, "Failed to initialize scan")
 		return
 	}
 
 	storagePath, _, err := h.fileStorage.SaveImage(strconv.FormatInt(scanID, 10), imageData, mimeType)
 	if err != nil {
-		log.Printf("Failed to save image: %v", err)
+		log.ErrorWithErr(err, "Failed to save image to storage")
 		h.writeJSONError(w, http.StatusInternalServerError, "Failed to save uploaded image")
 		return
 	}
@@ -144,8 +155,14 @@ func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
 
 	err = h.db.UpdateScanOCR(r.Context(), scanID, "", "")
 	if err != nil {
-		log.Printf("Failed to update scan with image URL: %v", err)
+		log.ErrorWithErr(err, "Failed to update scan with image URL")
 	}
+
+	log.WithFields(map[string]any{
+		"scan_id":   scanID,
+		"user_id":   userID,
+		"image_url": imageURL,
+	}).Infof("Scan created successfully, starting OCR processing")
 
 	go h.processOCR(context.Background(), scanID, imageData, mimeType, storagePath)
 
@@ -178,6 +195,8 @@ func (h *ScanHandlers) GetScansAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log := logger.GetDefaultLogger().WithRequestID(middleware.GetRequestID(r.Context())).WithUserID(userID)
+
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -193,10 +212,12 @@ func (h *ScanHandlers) GetScansAPI(w http.ResponseWriter, r *http.Request) {
 
 	scans, err := h.db.GetScansByUserID(r.Context(), userID, page, size)
 	if err != nil {
-		log.Printf("Failed to get scans: %v", err)
+		log.ErrorWithErr(err, "Failed to get scans from database")
 		h.writeJSONError(w, http.StatusInternalServerError, "Failed to get scans")
 		return
 	}
+
+	log.Infof("Retrieved %d scans for user (page=%d, size=%d)", len(scans), page, size)
 
 	data := make([]ScanListItem, len(scans))
 	for i, scan := range scans {
@@ -239,6 +260,8 @@ func (h *ScanHandlers) GetScanAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log := logger.GetDefaultLogger().WithRequestID(middleware.GetRequestID(r.Context()))
+
 	if r.Method != http.MethodGet {
 		h.writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -250,27 +273,34 @@ func (h *ScanHandlers) GetScanAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log = log.WithUserID(userID)
+
 	path := strings.TrimPrefix(r.URL.Path, "/v1/scans/")
 	scanIDStr := strings.TrimSuffix(path, "/")
 	scanID, err := strconv.ParseInt(scanIDStr, 10, 64)
 	if err != nil {
+		log.Warnf("Invalid scan ID format: %s", scanIDStr)
 		h.writeJSONError(w, http.StatusBadRequest, "Invalid scan ID")
 		return
 	}
 
+	log = log.WithField("scan_id", scanID)
+
 	scan, err := h.db.GetScanByID(r.Context(), scanID)
 	if err != nil {
-		log.Printf("GetScanByID error for scan %d: %v", scanID, err)
+		log.ErrorWithErr(err, "Failed to get scan by ID from database")
 		h.writeJSONError(w, http.StatusNotFound, "Scan not found")
 		return
 	}
 
 	if scan == nil {
+		log.Warn("Scan not found")
 		h.writeJSONError(w, http.StatusNotFound, "Scan not found")
 		return
 	}
 
 	if scan.UserID != userID {
+		log.Warn("User attempted to access scan belonging to another user")
 		h.writeJSONError(w, http.StatusForbidden, "Access denied")
 		return
 	}
@@ -279,6 +309,8 @@ func (h *ScanHandlers) GetScanAPI(w http.ResponseWriter, r *http.Request) {
 	if scan.FullOCRText != nil {
 		fullText = *scan.FullOCRText
 	}
+
+	log.Infof("Successfully retrieved scan: id=%d, has_ocr=%v", scanID, fullText != "")
 
 	response := GetScanResponse{
 		ID:               scan.ID,
@@ -293,22 +325,26 @@ func (h *ScanHandlers) GetScanAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScanHandlers) processOCR(ctx context.Context, scanID int64, imageData []byte, mimeType string, storagePath string) {
-	log.Printf("Starting OCR processing for scan %d", scanID)
+	log := logger.GetDefaultLogger().WithField("scan_id", scanID)
+
+	log.Infof("Starting OCR processing: image_size=%d bytes, mime_type=%s", len(imageData), mimeType)
 	ocrResp, err := h.geminiClient.OCR(ctx, imageData, mimeType)
 	if err != nil {
-		log.Printf("OCR failed for scan %d: %v", scanID, err)
+		log.ErrorWithErr(err, "OCR processing failed")
 		return
 	}
-	log.Printf("OCR successful for scan %d", scanID)
+	log.Infof("OCR completed successfully: language=%s, text_length=%d", ocrResp.Language, len(ocrResp.RawText))
 
 	imageURL := fmt.Sprintf("/uploads/%s", storagePath)
 
 	_ = imageURL
 
 	if err := h.db.UpdateScanOCR(ctx, scanID, ocrResp.RawText, ocrResp.Language); err != nil {
-		log.Printf("Failed to update scan OCR for scan %d: %v", scanID, err)
+		log.ErrorWithErr(err, "Failed to update scan OCR in database")
+		return
 	}
-	log.Printf("OCR completed successfully for scan %d", scanID)
+
+	log.Infof("OCR results saved to database successfully")
 }
 
 func (h *ScanHandlers) setCORSHeaders(w http.ResponseWriter) {

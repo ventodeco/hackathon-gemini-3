@@ -17,6 +17,7 @@ import type {
   CreateAnnotationResponse,
   GetAnnotationsResponse,
 } from './types'
+import { logger } from './logger'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 const AUTH_TOKEN_KEY = 'auth_token'
@@ -46,15 +47,20 @@ function isAuthError(status: number): boolean {
   return status === 401
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+async function handleResponse<T>(response: Response, method: string, url: string): Promise<T> {
+  const startTime = Date.now()
+  
   if (!response.ok) {
     if (isAuthError(response.status)) {
       clearAuthToken()
       window.location.href = '/login'
     }
     const error = await response.text().catch(() => 'An error occurred')
+    logger.apiCall(method, url, response.status, Date.now() - startTime, new Error(error))
     throw new Error(error)
   }
+  
+  logger.apiCall(method, url, response.status, Date.now() - startTime)
   return response.json()
 }
 
@@ -63,24 +69,26 @@ async function handleResponse<T>(response: Response): Promise<T> {
 // ============================================================================
 
 export async function getGoogleAuthUrl(): Promise<{ ssoRedirection: string }> {
-  const response = await fetch(`${API_BASE_URL}/v1/auth/google/state`, {
+  const url = `${API_BASE_URL}/v1/auth/google/state`
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
     },
   })
-  return handleResponse(response)
+  return handleResponse(response, 'GET', url)
 }
 
 export async function exchangeGoogleCode(code: string): Promise<TokenResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/auth/google/callback`, {
+  const url = `${API_BASE_URL}/v1/auth/google/callback`
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ code }),
   })
-  return handleResponse(response)
+  return handleResponse(response, 'POST', url)
 }
 
 // ============================================================================
@@ -88,20 +96,22 @@ export async function exchangeGoogleCode(code: string): Promise<TokenResponse> {
 // ============================================================================
 
 export async function getUserProfile(): Promise<GetUserProfileResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/users/me`, {
+  const url = `${API_BASE_URL}/v1/users/me`
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
   })
-  return handleResponse(response)
+  return handleResponse(response, 'GET', url)
 }
 
 export async function updateUserPreferences(
   preferences: UpdateUserPreferencesRequest,
 ): Promise<GetUserProfileResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/users/me`, {
+  const url = `${API_BASE_URL}/v1/users/me`
+  const response = await fetch(url, {
     method: 'PATCH',
     headers: {
       ...getAuthHeaders(),
@@ -109,18 +119,19 @@ export async function updateUserPreferences(
     },
     body: JSON.stringify(preferences),
   })
-  return handleResponse(response)
+  return handleResponse(response, 'PATCH', url)
 }
 
 export async function getLanguages(): Promise<GetLanguagesResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/users/me/languages`, {
+  const url = `${API_BASE_URL}/v1/users/me/languages`
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
   })
-  return handleResponse(response)
+  return handleResponse(response, 'GET', url)
 }
 
 // ============================================================================
@@ -131,34 +142,38 @@ export async function createScan(imageFile: File): Promise<CreateScanResponse> {
   const formData = new FormData()
   formData.append('image', imageFile)
 
-  const response = await fetch(`${API_BASE_URL}/v1/scans`, {
+  const url = `${API_BASE_URL}/v1/scans`
+  logger.debug(`Uploading image: ${imageFile.name}, size: ${imageFile.size} bytes`)
+  const response = await fetch(url, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: formData,
   })
-  return handleResponse(response)
+  return handleResponse(response, 'POST', url)
 }
 
 export async function getScans(page = 1, size = 20): Promise<GetScansResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/scans?page=${page}&size=${size}`, {
+  const url = `${API_BASE_URL}/v1/scans?page=${page}&size=${size}`
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
   })
-  return handleResponse(response)
+  return handleResponse(response, 'GET', url)
 }
 
 export async function getScan(scanId: number): Promise<Scan> {
-  const response = await fetch(`${API_BASE_URL}/v1/scans/${scanId}`, {
+  const url = `${API_BASE_URL}/v1/scans/${scanId}`
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
   })
-  return handleResponse(response)
+  return handleResponse(response, 'GET', url)
 }
 
 // ============================================================================
@@ -166,7 +181,8 @@ export async function getScan(scanId: number): Promise<Scan> {
 // ============================================================================
 
 export async function analyzeText(request: AnalyzeRequest): Promise<AnalyzeResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/ai/analyze`, {
+  const url = `${API_BASE_URL}/v1/ai/analyze`
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       ...getAuthHeaders(),
@@ -174,7 +190,7 @@ export async function analyzeText(request: AnalyzeRequest): Promise<AnalyzeRespo
     },
     body: JSON.stringify(request),
   })
-  return handleResponse(response)
+  return handleResponse(response, 'POST', url)
 }
 
 // ============================================================================
@@ -184,7 +200,8 @@ export async function analyzeText(request: AnalyzeRequest): Promise<AnalyzeRespo
 export async function createAnnotation(
   request: CreateAnnotationRequest,
 ): Promise<CreateAnnotationResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/annotations`, {
+  const url = `${API_BASE_URL}/v1/annotations`
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       ...getAuthHeaders(),
@@ -192,18 +209,19 @@ export async function createAnnotation(
     },
     body: JSON.stringify(request),
   })
-  return handleResponse(response)
+  return handleResponse(response, 'POST', url)
 }
 
 export async function getAnnotations(page = 1, size = 20): Promise<GetAnnotationsResponse> {
-  const response = await fetch(`${API_BASE_URL}/v1/annotations?page=${page}&size=${size}`, {
+  const url = `${API_BASE_URL}/v1/annotations?page=${page}&size=${size}`
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'application/json',
     },
   })
-  return handleResponse(response)
+  return handleResponse(response, 'GET', url)
 }
 
 // ============================================================================

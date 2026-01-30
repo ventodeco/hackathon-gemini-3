@@ -142,3 +142,28 @@ jobs:
             ${{ env.FRONTEND_IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [test_build_push_be, test_build_push_fe]
+    environment: ENV_PRODUCTION
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/project-vps/project/hackathon-gemini-3-2026/backend/
+            docker-compose pull
+            docker-compose down
+            docker-compose up -d
+            cd ~/project-vps/project/hackathon-gemini-3-2026/frontend/
+            docker-compose pull
+            docker-compose down
+            docker-compose up -d

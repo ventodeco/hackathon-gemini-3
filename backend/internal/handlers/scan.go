@@ -371,3 +371,14 @@ func isValidImageType(mimeType string) bool {
 	}
 	return false
 }
+
+func (h *ScanHandlers) ScansAPI(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.CreateScanAPI(w, r)
+	case http.MethodGet:
+		h.GetScansAPI(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}

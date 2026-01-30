@@ -1,19 +1,30 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import ScanImage from '../ScanImage'
+import { getScanImageUrl } from '@/lib/api'
+
+vi.mock('@/lib/api', () => ({
+  getScanImageUrl: vi.fn((url: string) => `http://localhost:8080${url}`),
+}))
 
 describe('ScanImage', () => {
   it('should render image with correct src', () => {
-    render(<ScanImage scanID="test-scan-id" />)
+    render(<ScanImage imageUrl="/v1/scans/test-scan-id/image" />)
 
     const img = screen.getByRole('img')
-    expect(img).toHaveAttribute('src', expect.stringContaining('/api/scans/test-scan-id/image'))
+    expect(getScanImageUrl).toHaveBeenCalledWith('/v1/scans/test-scan-id/image')
+    expect(img).toHaveAttribute('src', 'http://localhost:8080/v1/scans/test-scan-id/image')
   })
 
   it('should use custom alt text', () => {
-    render(<ScanImage scanID="test-id" alt="Custom alt" />)
+    render(<ScanImage imageUrl="/v1/scans/test-id/image" alt="Custom alt" />)
 
     const img = screen.getByAltText('Custom alt')
     expect(img).toBeInTheDocument()
+  })
+
+  it('should return null when imageUrl is undefined', () => {
+    const { container } = render(<ScanImage imageUrl={undefined as any} />)
+    expect(container).toBeEmptyDOMElement()
   })
 })

@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import { BookmarkCard } from '../BookmarkCard'
 import type { Annotation } from '@/lib/types'
@@ -18,19 +18,20 @@ vi.mock('@/lib/mockData', () => ({
 }))
 
 const mockAnnotation: Annotation = {
-  id: 'ann-1',
-  scanID: 'scan-1',
-  ocrResultID: 'ocr-1',
-  selectedText: 'お忙しい中',
-  meaning: 'While you are busy',
-  usageExample: 'お忙しい中ありがとうございます',
-  whenToUse: 'When making requests',
-  wordBreakdown: 'お忙しい (busy) 中 (during)',
-  alternativeMeanings: 'Amidst your busy schedule',
-  model: 'gemini-1.5-flash',
-  promptVersion: '1.0',
-  createdAt: '2026-01-12T10:00:00.000Z',
-  context: 'Business email context',
+  id: 1,
+  user_id: 1,
+  scan_id: 1,
+  highlighted_text: 'お忙しい中',
+  context_text: 'Business email context',
+  nuance_data: {
+    meaning: 'While you are busy',
+    usageExample: 'お忙しい中ありがとうございます',
+    usageTiming: 'When making requests',
+    wordBreakdown: 'お忙しい (busy) 中 (during)',
+    alternativeMeaning: 'Amidst your busy schedule',
+  },
+  is_bookmarked: true,
+  created_at: '2026-01-12T10:00:00.000Z',
 }
 
 describe('BookmarkCard', () => {
@@ -61,9 +62,10 @@ describe('BookmarkCard', () => {
   })
 
   it('should show error toast when scan does not exist', () => {
+    const annotationWithoutScan = { ...mockAnnotation, scan_id: undefined }
     render(
       <BrowserRouter>
-        <BookmarkCard annotation={mockAnnotation} onDelete={onDelete} />
+        <BookmarkCard annotation={annotationWithoutScan} onDelete={onDelete} />
       </BrowserRouter>
     )
     const card = screen.getByRole('button', { name: /お忙しい中/ })
@@ -79,7 +81,7 @@ describe('BookmarkCard', () => {
     )
     const deleteButton = screen.getByRole('button', { name: /delete annotation/i })
     fireEvent.click(deleteButton)
-    expect(onDelete).toHaveBeenCalledWith('ann-1')
+    expect(onDelete).toHaveBeenCalledWith(1)
     expect(toast.success).toHaveBeenCalledWith('Annotation removed', expect.any(Object))
   })
 })

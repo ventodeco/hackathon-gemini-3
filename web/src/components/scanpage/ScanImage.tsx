@@ -6,6 +6,9 @@ interface ScanImageProps {
 }
 
 export default function ScanImage({ imageUrl, alt = 'Scanned image' }: ScanImageProps) {
+  if (!imageUrl) {
+    return null
+  }
   return (
     <div className="mb-6">
       <img

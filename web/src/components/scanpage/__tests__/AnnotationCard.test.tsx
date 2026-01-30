@@ -5,18 +5,20 @@ import type { Annotation } from '@/lib/types'
 
 describe('AnnotationCard', () => {
   const mockAnnotation: Annotation = {
-    id: 'ann-1',
-    scanID: 'scan-1',
-    ocrResultID: 'ocr-1',
-    selectedText: 'テスト',
-    meaning: 'Test meaning',
-    usageExample: 'Usage example',
-    whenToUse: 'When to use',
-    wordBreakdown: 'Word breakdown',
-    alternativeMeanings: 'Alternative meanings',
-    model: 'gemini-2.5-flash',
-    promptVersion: '1.0',
-    createdAt: '2024-01-01T00:00:00Z',
+    id: 1,
+    user_id: 1,
+    scan_id: 1,
+    highlighted_text: 'テスト',
+    context_text: 'Test context',
+    nuance_data: {
+      meaning: 'Test meaning',
+      usageExample: 'Usage example',
+      usageTiming: 'When to use',
+      wordBreakdown: 'Word breakdown',
+      alternativeMeaning: 'Alternative meanings',
+    },
+    is_bookmarked: false,
+    created_at: '2024-01-01T00:00:00Z',
   }
 
   it('should render annotation fields', () => {

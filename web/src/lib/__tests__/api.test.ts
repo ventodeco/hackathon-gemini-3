@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
-import { createScan, getScan, annotate, getScanImageURL } from '../api'
+import { createScan, getScan, analyzeText, getScanImageUrl } from '../api'
 
 describe('API Client', () => {
   beforeEach(() => {
@@ -25,7 +25,7 @@ describe('API Client', () => {
 
       expect(result).toEqual(mockResponse)
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/scans'),
+        expect.stringContaining('/v1/scans'),
         expect.objectContaining({
           method: 'POST',
           body: expect.any(FormData),
@@ -48,7 +48,7 @@ describe('API Client', () => {
   describe('getScan', () => {
     it('should get scan data successfully', async () => {
       const mockResponse = {
-        scan: { id: 'test-id', status: 'ocr_done' },
+        scan: { id: 1, status: 'ocr_done' },
         ocrResult: { id: 'ocr-id', rawText: 'test text' },
         status: 'ocr_done',
       }
@@ -58,11 +58,15 @@ describe('API Client', () => {
         json: async () => mockResponse,
       })
 
-      const result = await getScan('test-id')
+      const result = await getScan(1)
 
       expect(result).toEqual(mockResponse)
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/scans/test-id')
+        'http://localhost:8080/v1/scans/1',
+        expect.objectContaining({
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        })
       )
     })
 
@@ -73,14 +77,13 @@ describe('API Client', () => {
         text: async () => 'Scan not found',
       })
 
-      await expect(getScan('invalid-id')).rejects.toThrow('Scan not found')
+      await expect(getScan(999)).rejects.toThrow('Scan not found')
     })
   })
 
-  describe('annotate', () => {
-    it('should create annotation successfully', async () => {
+  describe('analyzeText', () => {
+    it('should analyze text successfully', async () => {
       const mockResponse = {
-        id: 'ann-id',
         meaning: 'test meaning',
         usageExample: 'test example',
         whenToUse: 'test when',
@@ -93,15 +96,15 @@ describe('API Client', () => {
         json: async () => mockResponse,
       })
 
-      const result = await annotate('scan-id', { selectedText: 'test' })
+      const result = await analyzeText({ textToAnalyze: 'test', context: 'test context' })
 
       expect(result).toEqual(mockResponse)
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/scans/scan-id/annotate'),
+        expect.stringContaining('/v1/ai/analyze'),
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ selectedText: 'test' }),
+          body: JSON.stringify({ textToAnalyze: 'test', context: 'test context' }),
         })
       )
     })
@@ -113,16 +116,21 @@ describe('API Client', () => {
         text: async () => 'Invalid selection',
       })
 
-      await expect(annotate('scan-id', { selectedText: '' })).rejects.toThrow(
+      await expect(analyzeText({ textToAnalyze: '', context: 'test' })).rejects.toThrow(
         'Invalid selection'
       )
     })
   })
 
-  describe('getScanImageURL', () => {
-    it('should return correct image URL', () => {
-      const url = getScanImageURL('test-id')
-      expect(url).toContain('/api/scans/test-id/image')
+  describe('getScanImageUrl', () => {
+    it('should return correct image URL for relative path', () => {
+      const url = getScanImageUrl('/v1/scans/test-id/image')
+      expect(url).toContain('/v1/scans/test-id/image')
+    })
+
+    it('should return original URL for absolute URLs', () => {
+      const url = getScanImageUrl('http://example.com/image.jpg')
+      expect(url).toBe('http://example.com/image.jpg')
     })
   })
 })

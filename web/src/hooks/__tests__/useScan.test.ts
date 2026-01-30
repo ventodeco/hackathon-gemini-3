@@ -32,7 +32,7 @@ describe('useScan', () => {
 
     vi.mocked(api.getScan).mockResolvedValueOnce(mockData)
 
-    const { result } = renderHook(() => useScan('test-id'), { wrapper })
+    const { result } = renderHook(() => useScan(123), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
@@ -55,7 +55,7 @@ describe('useScan', () => {
 
     vi.mocked(api.getScan).mockResolvedValue(mockData)
 
-    const { result } = renderHook(() => useScan('test-id'), { wrapper })
+    const { result } = renderHook(() => useScan(123), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
@@ -70,11 +70,12 @@ describe('useScan', () => {
       scan: { id: 'test-id', status: 'ocr_done' },
       ocrResult: { id: 'ocr-id', rawText: 'test' },
       status: 'ocr_done',
+      full_ocr_text: 'test full text',
     }
 
     vi.mocked(api.getScan).mockResolvedValue(mockData)
 
-    const { result } = renderHook(() => useScan('test-id'), { wrapper })
+    const { result } = renderHook(() => useScan(123), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 

@@ -55,8 +55,7 @@ export function useInitiateLogin() {
 
     setIsOpening(true)
     try {
-      const frontendURL = window.location.origin
-      const { ssoRedirection } = await getGoogleAuthUrl(frontendURL)
+      const { ssoRedirection } = await getGoogleAuthUrl(`${window.location.origin}/auth/callback`)
 
       const width = 500
       const height = 700

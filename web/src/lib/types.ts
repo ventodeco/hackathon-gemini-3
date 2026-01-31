@@ -16,14 +16,13 @@ export interface TokenResponse {
   expiresAt: string
 }
 
-// Scan Types (new schema)
+// Scan Types (matches API response)
 export interface Scan {
   id: number
-  user_id: number
-  image_url: string
-  full_ocr_text?: string
-  detected_language?: string
-  created_at: string
+  fullText?: string
+  imageUrl: string
+  detectedLanguage?: string
+  createdAt: string
 }
 
 export interface CreateScanResponse {

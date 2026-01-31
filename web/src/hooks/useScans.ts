@@ -29,9 +29,9 @@ export function useCreateScan() {
 }
 
 export function useScanImageUrl(scan: Scan | undefined): string {
-  if (!scan || !scan.image_url) return ''
-  if (scan.image_url.startsWith('/')) {
-    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${scan.image_url}`
+  if (!scan || !scan.imageUrl) return ''
+  if (scan.imageUrl.startsWith('/')) {
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${scan.imageUrl}`
   }
-  return scan.image_url
+  return scan.imageUrl
 }

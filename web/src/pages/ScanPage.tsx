@@ -114,7 +114,7 @@ export default function ScanPage() {
     )
   }
 
-  const imageUrl = getScanImageUrl(scan.image_url)
+  const imageUrl = getScanImageUrl(scan.imageUrl)
 
   return (
     <div className="min-h-screen bg-white flex flex-col pb-20">
@@ -128,18 +128,18 @@ export default function ScanPage() {
               className="w-full mb-6 rounded-lg"
             />
           )}
-          {scan.full_ocr_text && (
+          {scan.fullText && (
             <p
               className="text-base leading-relaxed text-gray-900 whitespace-pre-wrap"
               onMouseUp={handleTextSelect}
               onTouchEnd={handleTextSelect}
             >
-              {scan.full_ocr_text}
+              {scan.fullText}
             </p>
           )}
           <div className="mt-4 text-sm text-gray-500">
-            <p>Detected language: {scan.detected_language || 'Unknown'}</p>
-            <p>Created: {formatDate(scan.created_at)}</p>
+            <p>Detected language: {scan.detectedLanguage || 'Unknown'}</p>
+            <p>Created: {formatDate(scan.createdAt)}</p>
           </div>
         </div>
       </ScrollArea>

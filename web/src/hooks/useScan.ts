@@ -13,7 +13,7 @@ export function useScan(scanId: number | undefined, enabled: boolean = true) {
       const data = query.state.data
       if (!data) return false
 
-      const hasFullText = !!data.full_ocr_text
+      const hasFullText = !!data.fullText
       if (hasFullText) return false
 
       return 2000

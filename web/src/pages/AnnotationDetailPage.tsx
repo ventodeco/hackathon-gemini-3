@@ -1,4 +1,4 @@
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Header from '@/components/layout/Header'
 import BottomNavigation from '@/components/layout/BottomNavigation'
 import { formatDate } from '@/lib/api'
@@ -11,7 +11,6 @@ interface AnnotationState {
 
 export default function AnnotationDetailPage() {
   const navigate = useNavigate()
-  const { id } = useParams<{ id: string }>()
   const location = useLocation()
   const annotation = location.state as AnnotationState | null
 

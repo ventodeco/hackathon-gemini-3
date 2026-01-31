@@ -50,12 +50,6 @@ type GetAnnotationsResponse struct {
 }
 
 func (h *AnnotationHandlers) CreateAnnotationAPI(w http.ResponseWriter, r *http.Request) {
-	h.setCORSHeaders(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	if r.Method != http.MethodPost {
 		h.writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -111,12 +105,6 @@ func (h *AnnotationHandlers) CreateAnnotationAPI(w http.ResponseWriter, r *http.
 }
 
 func (h *AnnotationHandlers) GetAnnotationsAPI(w http.ResponseWriter, r *http.Request) {
-	h.setCORSHeaders(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	if r.Method != http.MethodGet {
 		h.writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -181,12 +169,6 @@ func (h *AnnotationHandlers) GetAnnotationsAPI(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
-}
-
-func (h *AnnotationHandlers) setCORSHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, x-token")
 }
 
 func (h *AnnotationHandlers) writeJSONError(w http.ResponseWriter, statusCode int, message string) {

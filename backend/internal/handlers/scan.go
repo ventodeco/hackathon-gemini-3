@@ -73,12 +73,6 @@ type ErrorResponse struct {
 }
 
 func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
-	h.setCORSHeaders(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	log := logger.GetDefaultLogger().WithRequestID(middleware.GetRequestID(r.Context()))
 
 	if r.Method != http.MethodPost {
@@ -178,12 +172,6 @@ func (h *ScanHandlers) CreateScanAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScanHandlers) GetScansAPI(w http.ResponseWriter, r *http.Request) {
-	h.setCORSHeaders(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	if r.Method != http.MethodGet {
 		h.writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -254,12 +242,6 @@ func (h *ScanHandlers) GetScansAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScanHandlers) GetScanAPI(w http.ResponseWriter, r *http.Request) {
-	h.setCORSHeaders(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	log := logger.GetDefaultLogger().WithRequestID(middleware.GetRequestID(r.Context()))
 
 	if r.Method != http.MethodGet {
@@ -345,12 +327,6 @@ func (h *ScanHandlers) processOCR(ctx context.Context, scanID int64, imageData [
 	}
 
 	log.Infof("OCR results saved to database successfully")
-}
-
-func (h *ScanHandlers) setCORSHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, x-token")
 }
 
 func (h *ScanHandlers) writeJSONError(w http.ResponseWriter, statusCode int, message string) {

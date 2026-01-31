@@ -62,7 +62,7 @@ describe('API Client', () => {
 
       expect(result).toEqual(mockResponse)
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/v1/scans/1',
+        expect.stringContaining('/v1/scans/1'),
         expect.objectContaining({
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },

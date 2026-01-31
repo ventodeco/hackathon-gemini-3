@@ -70,7 +70,7 @@ describe('useScan', () => {
       scan: { id: 'test-id', status: 'ocr_done' },
       ocrResult: { id: 'ocr-id', rawText: 'test' },
       status: 'ocr_done',
-      full_ocr_text: 'test full text',
+      fullText: 'test full text',
     }
 
     vi.mocked(api.getScan).mockResolvedValue(mockData)
